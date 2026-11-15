@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STM32U575 启动流程动画 · 上电 → main()</title>
+<style>
+:root{
+  --bg:#0a0e13; --bg2:#0d131a; --panel:#101821; --line:#1e2a36; --line2:#263543;
+  --tx:#dce7f2; --mut:#8296aa; --dim:#56697d;
+  --flash:#ff9f45; --sram:#38d0e0; --reg:#a78bfa; --stack:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:
+    radial-gradient(1200px 600px at 15% -10%,rgba(56,208,224,.07),transparent 60%),
+    radial-gradient(900px 500px at 90% 0%,rgba(167,139,250,.06),transparent 55%),
+    var(--bg);
+  color:var(--tx);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden;
+  font-size:14px;-webkit-font-smoothing:antialiased;
+}
+.mono{font-family:var(--mono);font-variant-ligatures:none}
+code{font-family:var(--mono);font-size:.92em;background:rgba(56,208,224,.09);color:#a8e9f2;
+  border:1px solid rgba(56,208,224,.16);border-radius:4px;padding:0 4px;white-space:nowrap}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(16,24,33,.96),rgba(10,14,19,.86));flex:0 0 auto}
+.logo{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,159,69,.4);
+  background:linear-gradient(140deg,rgba(255,159,69,.22),rgba(255,159,69,.04));display:grid;place-items:center;
+  color:var(--flash);font-family:var(--mono);font-size:12px;font-weight:700;flex:0 0 auto}
+.ttl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ttl h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.2px}
+.ttl span{font-size:11.5px;color:var(--mut)}
+.chips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:999px;
+  border:1px solid var(--line2);color:var(--mut);background:rgba(255,255,255,.02)}
+.chip.hot{color:#ffcd9b;border-color:rgba(255,159,69,.32);background:rgba(255,159,69,.07)}
+.chip.cool{color:#9fe9f2;border-color:rgba(56,208,224,.3);background:rgba(56,208,224,.07)}
+
+/* ---------- controls ---------- */
+.controls{display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--line);
+  background:rgba(13,19,26,.75);flex:0 0 auto}
+.btn{appearance:none;border:1px solid var(--line2);background:#141d27;color:var(--tx);
+  height:30px;min-width:30px;padding:0 10px;border-radius:7px;cursor:pointer;font-size:12.5px;
+  display:inline-flex;align-items:center;gap:6px;transition:.15s;font-family:var(--sans)}
+.btn:hover{background:#1b2733;border-color:#33475a}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(180deg,#2a3c4e,#1a2836);border-color:#3a5064;min-width:76px;justify-content:center}
+.btn.primary.on{border-color:rgba(56,208,224,.55);box-shadow:0 0 0 1px rgba(56,208,224,.15) inset}
+.btn svg{width:13px;height:13px;fill:currentColor}
+.sep{width:1px;height:20px;background:var(--line2);margin:0 2px}
+.track{flex:1;position:relative;height:26px;display:flex;align-items:center;cursor:pointer;min-width:120px}
+.track .rail{position:absolute;left:0;right:0;height:4px;background:#182430;border-radius:3px;overflow:hidden}
+.track .fill{height:100%;width:0;background:linear-gradient(90deg,var(--flash),var(--sram));transition:width .18s}
+.track .knob{position:absolute;width:11px;height:11px;border-radius:50%;background:#e8f6fb;
+  border:2px solid #0a0e13;box-shadow:0 0 0 2px rgba(56,208,224,.5);transform:translateX(-50%);transition:left .18s}
+.track .tick{position:absolute;top:3px;width:1px;height:20px;background:rgba(255,255,255,.12)}
+.counter{font-family:var(--mono);font-size:12px;color:var(--mut);min-width:96px;text-align:right}
+.counter b{color:var(--tx);font-weight:600}
+select{background:#141d27;color:var(--tx);border:1px solid var(--line2);border-radius:7px;height:30px;padding:0 6px;font-size:12px;font-family:var(--mono);outline:none}
+
+/* ---------- layout ---------- */
+.main{flex:1;display:grid;grid-template-columns:216px minmax(0,1fr);min-height:0}
+.rail{border-right:1px solid var(--line);overflow:auto;padding:10px 8px 18px;background:rgba(9,13,18,.5)}
+.rail-h{font-size:10.5px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;padding:4px 8px 8px}
+.ch{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
+  color:var(--mut);padding:7px 8px;border-radius:7px;cursor:pointer;font-size:12px;line-height:1.35;
+  margin-bottom:2px;transition:.15s;font-family:var(--sans)}
+.ch:hover{background:rgba(255,255,255,.03);color:var(--tx)}
+.ch .no{font-family:var(--mono);color:var(--dim);font-size:10.5px;margin-right:5px}
+.ch.active{background:linear-gradient(90deg,rgba(56,208,224,.14),rgba(56,208,224,.02));
+  border-color:rgba(56,208,224,.28);color:#dff6fb}
+.ch.active .no{color:var(--sram)}
+.ch .pg{display:block;font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:2px}
+.ch.done .no{color:var(--stack)}
+
+.stage{display:flex;flex-direction:column;min-height:0;padding:12px 14px 10px;gap:10px}
+.framehead{display:flex;align-items:baseline;gap:10px;flex:0 0 auto;flex-wrap:wrap}
+.fh-ch{font-family:var(--mono);font-size:11px;color:var(--sram);border:1px solid rgba(56,208,224,.28);
+  padding:2px 7px;border-radius:5px;background:rgba(56,208,224,.06)}
+.fh-t{font-size:16px;font-weight:650;letter-spacing:.2px}
+.fh-ti{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.narr{font-size:13px;line-height:1.72;color:#c3d2e0;flex:0 0 auto;
+  border-left:2px solid rgba(56,208,224,.35);padding:2px 0 2px 11px;max-height:96px;overflow:auto}
+.narr b{color:#fff;font-weight:600}
+.narr em{font-style:normal;color:var(--warn)}
+
+.panels{flex:1;display:grid;grid-template-columns:1fr 1.12fr 1.06fr;gap:10px;min-height:0}
+.panel{background:linear-gradient(180deg,rgba(17,25,34,.92),rgba(12,18,25,.92));border:1px solid var(--line);
+  border-radius:10px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel>header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.panel>header h2{margin:0;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:650}
+.panel>header .ad{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-left:auto}
+.panel.flash>header h2{color:var(--flash)}
+.panel.sram>header h2{color:var(--sram)}
+.panel.regs>header h2{color:var(--reg)}
+.panel .body{overflow:auto;padding:8px 10px 12px;flex:1;min-height:0;scrollbar-width:thin}
+.panel .body::-webkit-scrollbar{width:7px}
+.panel .body::-webkit-scrollbar-thumb{background:#24323f;border-radius:4px}
+
+/* ---------- segment rows ---------- */
+.group-h{font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin:8px 0 5px;display:flex;gap:6px;align-items:center}
+.group-h:first-child{margin-top:0}
+.group-h i{flex:1;height:1px;background:var(--line);display:block}
+.seg{border:1px solid var(--line);border-radius:7px;padding:5px 7px;margin-bottom:5px;
+  background:rgba(255,255,255,.012);transition:.25s;position:relative}
+.seg .row{display:flex;align-items:baseline;gap:6px;font-size:11.5px}
+.seg .nm{font-weight:600;color:#cfdae6;font-size:11.5px}
+.seg .nm em{font-style:normal;font-weight:400;color:var(--dim);font-size:10px;margin-left:4px}
+.seg .ad{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.seg .sz{font-family:var(--mono);font-size:10px;color:var(--mut);margin-left:auto}
+.seg .bar{height:3px;background:#16212c;border-radius:2px;margin-top:5px;overflow:hidden}
+.seg .bar i{display:block;height:100%;width:var(--f,100%);border-radius:2px;
+  background:linear-gradient(90deg,rgba(255,159,69,.75),rgba(255,159,69,.35));transition:width .45s ease}
+.seg.s-sram .bar i{background:linear-gradient(90deg,rgba(56,208,224,.85),rgba(56,208,224,.3))}
+.seg.s-stack .bar i{background:linear-gradient(90deg,rgba(74,222,128,.85),rgba(74,222,128,.28))}
+.seg.hl{border-color:rgba(56,208,224,.5);box-shadow:0 0 0 1px rgba(56,208,224,.1) inset,0 0 18px -6px rgba(56,208,224,.55);background:rgba(56,208,224,.05)}
+.seg.hl.f{box-shadow:0 0 0 1px rgba(255,159,69,.1) inset,0 0 18px -6px rgba(255,159,69,.55);border-color:rgba(255,159,69,.5);background:rgba(255,159,69,.05)}
+.seg .tag{position:absolute;right:6px;top:-7px;font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:4px;
+  background:#0d131a;border:1px solid var(--line2);color:var(--mut)}
+.seg .tag.live{color:#0a0e13;background:var(--sram);border-color:var(--sram);font-weight:700}
+.seg.res .bar i{opacity:.45}
+.seg.res .nm{color:var(--mut)}
+
+/* ---------- sram blocks ---------- */
+.blk{border:1px solid var(--line);border-radius:8px;padding:6px 7px;margin-bottom:6px;transition:.25s;background:rgba(255,255,255,.012)}
+.blk .bh{display:flex;align-items:baseline;gap:6px;font-size:11px}
+.blk .bh b{color:#c9d6e3;font-size:11.5px}
+.blk .bh .ad{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.blk .bh .sz{font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-left:auto}
+.blk .inner{margin-top:5px;display:flex;flex-direction:column;gap:3px}
+.blk .mini{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;color:var(--mut);
+  border:1px solid var(--line);border-radius:4px;padding:2px 5px;background:rgba(0,0,0,.18)}
+.blk .mini .nm{color:#b9c8d6}
+.blk .mini .f{flex:1;height:2px;background:#16212c;border-radius:2px;overflow:hidden}
+.blk .mini .f i{display:block;height:100%;width:0;background:var(--sram);transition:width .45s}
+.blk.hl{border-color:rgba(56,208,224,.45);box-shadow:0 0 18px -8px rgba(56,208,224,.5);background:rgba(56,208,224,.045)}
+.mini.hl{border-color:rgba(56,208,224,.55);background:rgba(56,208,224,.09);box-shadow:0 0 14px -6px rgba(56,208,224,.6)}
+.spmark{display:flex;align-items:center;gap:5px;margin-top:4px;font-family:var(--mono);font-size:9.5px;color:var(--stack)}
+.spmark .ln{flex:1;height:1px;background:linear-gradient(90deg,rgba(74,222,128,.7),rgba(74,222,128,0))}
+.spmark .v{color:#b9f3cd}
+.empty2{font-family:var(--mono);font-size:9.5px;color:var(--dim);padding:1px 0}
+
+/* ---------- registers ---------- */
+.reg{border:1px solid var(--line);border-left:2px solid rgba(167,139,250,.55);border-radius:7px;
+  padding:7px 9px;margin-bottom:7px;background:linear-gradient(90deg,rgba(167,139,250,.06),rgba(167,139,250,0) 60%);
+  animation:rin .35s ease both}
+@keyframes rin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.reg .rt{display:flex;align-items:baseline;gap:8px}
+.reg .rn{font-size:12.5px;font-weight:650;color:#d8ccff}
+.reg .ra{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-left:auto}
+.reg .ro{font-family:var(--mono);font-size:10.5px;color:#8fb7c8;margin-top:3px;word-break:break-all}
+.reg .rv{display:flex;align-items:center;gap:7px;margin-top:5px;font-family:var(--mono);font-size:11px;flex-wrap:wrap}
+.reg .rv .b{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(248,113,113,.5)}
+.reg .rv .arr{color:var(--dim);font-size:10px}
+.reg .rv .af{color:#b9f3cd}
+.reg .bits{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.reg .bit{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:4px;border:1px solid var(--line2);color:var(--dim);background:rgba(0,0,0,.2)}
+.reg .bit b{margin-left:4px;font-weight:600}
+.reg .bit.on{border-color:rgba(74,222,128,.45);color:#b9f3cd;background:rgba(74,222,128,.08)}
+.reg .bit.on b{color:#eafff1}
+.reg .bit.unk{border-color:rgba(251,191,36,.45);color:#fde68a;background:rgba(251,191,36,.07)}
+.reg .bit.unk b{color:#fff7d6}
+.empty{font-size:11.5px;color:var(--dim);font-family:var(--mono);padding:10px 2px;line-height:1.7}
+
+/* ---------- flow ---------- */
+.flowbar{flex:0 0 auto;height:42px;border:1px solid var(--line);border-radius:9px;position:relative;
+  background:linear-gradient(90deg,rgba(255,159,69,.06),rgba(56,208,224,.06));overflow:hidden;display:flex;align-items:center}
+.flowbar .grid{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:26px 100%;opacity:.5}
+.flowbar .lbl{position:relative;margin-left:14px;font-family:var(--mono);font-size:11px;color:#b7c8d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:12px}
+.flowbar .lbl b{color:#fff}
+.flowbar .dot{position:absolute;left:6px;top:50%;width:7px;height:7px;border-radius:50%;background:var(--sram);
+  box-shadow:0 0 10px 2px rgba(56,208,224,.6);transform:translateY(-50%);opacity:0}
+.flowbar.active .dot{opacity:1;animation:run 2.2s linear infinite}
+@keyframes run{0%{left:4%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:96%;opacity:0}}
+.flowbar.idle .lbl{color:var(--dim)}
+
+/* ---------- log ---------- */
+.logger{flex:0 0 auto;height:132px;border:1px solid var(--line);border-radius:9px;background:rgba(8,12,17,.85);
+  display:flex;flex-direction:column;overflow:hidden}
+.logger .lh{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.logger .lh span{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+.logger .lh .mode{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.logger .lines{flex:1;overflow:auto;padding:6px 10px 10px;font-family:var(--mono);font-size:10.5px;line-height:1.62}
+.logger .lines::-webkit-scrollbar{width:7px}
+.logger .lines::-webkit-scrollbar-thumb{background:#24323f;border-radius:4px}
+.ln-row{display:flex;gap:9px;white-space:pre-wrap;word-break:break-word;animation:lin .3s ease both}
+@keyframes lin{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+.ln-row .t{color:#4a5f73;flex:0 0 62px}
+.ln-row .m{color:#a9bccd}
+.ln-row .m b{color:#e8f6fb;font-weight:600}
+.ln-row.hw .m{color:#7f93a6}
+.ln-row.wr .m{color:#c8b6ff}
+.ln-row.mem .m{color:#7ee0ea}
+.ln-row.sy .m{color:#9ae6b4}
+.foot{flex:0 0 auto;display:flex;gap:12px;padding:0 2px;font-size:10px;color:var(--dim);font-family:var(--mono)}
+.foot .w{color:var(--warn)}
+
+@media (max-width:1180px){
+  .panels{grid-template-columns:1fr 1fr}
+  .panel.regs{grid-column:1 / -1;max-height:230px}
+  .narr{max-height:118px}
+}
+@media (max-width:900px){
+  .main{grid-template-columns:1fr}
+  .rail{display:none}
+  .panels{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">U5</div>
+  <div class="ttl">
+    <h1>STM32U575 启动流程动画</h1>
+    <span>上电复位 → 向量取指 → SystemInit → 分散加载 → main() ｜ 栈 / 堆 / SRAM / Flash / 寄存器逐帧</span>
+  </div>
+  <div class="chips">
+    <span class="chip hot">Cortex-M33 · TZEN=0</span>
+    <span class="chip">Keil MDK / armclang</span>
+    <span class="chip">主 Flash 0x0800_0000</span>
+    <span class="chip cool">MSI 4 MHz</span>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="btnPrev" title="上一帧 (←)">
+    <svg viewBox="0 0 16 16"><path d="M10.5 2.5 6 8l4.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <button class="btn primary" id="btnPlay" title="播放 / 暂停 (空格)">
+    <svg id="icPlay" viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>
+    <span id="lblPlay">播放</span>
+  </button>
+  <button class="btn" id="btnNext" title="下一帧 (→)">
+    <svg viewBox="0 0 16 16"><path d="M5.5 2.5 10 8l-4.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div class="sep"></div>
+  <div class="track" id="track">
+    <div class="rail"><div class="fill" id="fill"></div></div>
+    <div class="knob" id="knob" style="left:0%"></div>
+  </div>
+  <div class="counter"><b id="cNow">1</b> / <span id="cAll">36</span> 帧</div>
+  <div class="sep"></div>
+  <select id="speed" title="播放速度">
+    <option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+  </select>
+</div>
+
+<div class="main">
+  <aside class="rail" id="rail">
+    <div class="rail-h">章节</div>
+  </aside>
+
+  <main class="stage">
+    <div class="framehead">
+      <span class="fh-ch" id="fhCh">CH00</span>
+      <span class="fh-t" id="fhTitle">—</span>
+      <span class="fh-ti" id="fhTime">t = —</span>
+    </div>
+    <div class="narr" id="narr"></div>
+
+    <div class="panels">
+      <!-- FLASH -->
+      <section class="panel flash">
+        <header><h2>Flash</h2><span class="ad">LR_IROM1 · 0x0800_0000 · 2 MB</span></header>
+        <div class="body">
+          <div class="group-h">主存储区 <i></i></div>
+          <div class="seg" id="f-vt" style="--f:100%">
+            <div class="row"><span class="nm">向量表<em>RESET, +First</em></span><span class="ad">0x0800_0000</span><span class="sz">0x1B8</span></div>
+            <div class="bar"><i></i></div>
+          </div>
+          <div class="seg" id="f-text" style="--f:100%">
+            <div class="row"><span class="nm">.text<em>代码</em></span><span class="ad">0x0800_01B8</span><span class="sz">≈ 60 KB</span></div>
+            <div class="bar"><i></i></div>
+          </div>
+          <div class="seg" id="f-rodata" style="--f:100%">
+            <div class="row"><span class="nm">.rodata<em>常量 / 字面量池</em></span><span class="ad">0x0800_F1B8</span><span class="sz">≈ 8 KB</span></div>
+            <div class="bar"><i></i></div>
+          </div>
+          <div class="seg" id="f-datainit" style="--f:100%">
+            <div class="row"><span class="nm">.data 初值<em>_sidata · 运行时拷到 SRAM</em></span><span class="ad">0x0801_11B8</span><span class="sz">0x200</span></div>
+            <div class="bar"><i></i></div>
+          </div>
+
+          <div class="group-h">启动相关区域（不在 LR_IROM1 内）<i></i></div>
+          <div class="seg" id="f-opt">
+            <div class="row"><span class="nm">选项字节<em>OTP 影子寄存器来源</em></span><span class="ad">0x0FF1_C000</span><span class="sz">32 B</span></div>
+            <div class="bar"><i style="width:100%;opacity:.35"></i></div>
+          </div>
+          <div class="seg" id="f-sys">
+            <div class="row"><span class="nm">系统存储器<em>ST Bootloader (DFU/UART…)</em></span><span class="ad">0x0BF9_0000</span><span class="sz">ROM</span></div>
+            <div class="bar"><i style="width:100%;opacity:.35"></i></div>
+          </div>
+          <div class="seg" id="f-otp">
+            <div class="row"><span class="nm">OTP<em>一次性可编程</em></span><span class="ad">0x0BFA_0000</span><span class="sz">512 B</span></div>
+            <div class="bar"><i style="width:100%;opacity:.35"></i></div>
+          </div>
+          <div class="empty2">⚠ 示例工程的段大小按教学取值；地址以你的 .map / .sct 为准。</div>
+        </div>
+      </section>
+
+      <!-- SRAM -->
+      <section class="panel sram">
+        <header><h2>SRAM</h2><span class="ad">RW_IRAM1 · 0x2000_0000 · 768 KB</span></header>
+        <div class="body">
+          <div class="blk" id="blk-sram1">
+            <div class="bh"><b>SRAM1</b><span class="ad">0x2000_0000</span><span class="sz">192 KB</span></div>
+            <div class="inner">
+              <div class="mini" id="m-data"><span class="nm">.data</span><span class="f"><i></i></span><span>0x2000_0000 · 0x200</span></div>
+              <div class="mini" id="m-bss"><span class="nm">.bss</span><span class="f"><i></i></span><span>0x2000_0200 · 0x800</span></div>
+              <div class="mini" id="m-heap"><span class="nm">heap</span><span class="f"><i></i></span><span>0x2000_0A00 · 0x200</span></div>
+            </div>
+            <div class="empty2" id="sram1-note">复位后为随机值，尚未被 C 运行时接管</div>
+          </div>
+
+          <div class="blk" id="blk-sram2">
+            <div class="bh"><b>SRAM2</b><span class="ad">0x2003_0000</span><span class="sz">64 KB · ECC</span></div>
+            <div class="empty2">未被本示例链接脚本使用</div>
+          </div>
+
+          <div class="blk" id="blk-sram3">
+            <div class="bh"><b>SRAM3</b><span class="ad">0x2004_0000</span><span class="sz">512 KB · ECC</span></div>
+            <div class="inner">
+              <div class="mini" id="m-stack"><span class="nm">stack</span><span class="f"><i></i></span><span>0x200B_FC00 · 0x400</span></div>
+            </div>
+            <div class="spmark"><span>MSP</span><span class="ln"></span><span class="v" id="spVal">0x200C_0000</span><span>↓ 生长</span></div>
+          </div>
+
+          <div class="blk" id="blk-sram4">
+            <div class="bh"><b>SRAM4</b><span class="ad">0x2800_0000</span><span class="sz">16 KB · LPBAM</span></div>
+            <div class="empty2">独立供电域，Stop 2 下可用</div>
+          </div>
+          <div class="blk" id="blk-bkp">
+            <div class="bh"><b>BKPSRAM</b><span class="ad">0x4003_6400</span><span class="sz">2 KB · ECC</span></div>
+            <div class="empty2">受 RCC_AHB3ENR / PWR 保护，非上电即用</div>
+          </div>
+          <div class="empty2">⚠ 栈顶 = RAM 顶部 <b style="color:#8fb7c8">0x200C_0000</b>（SRAM3 末尾），不是 SRAM1 顶部。</div>
+        </div>
+      </section>
+
+      <!-- REGISTERS -->
+      <section class="panel regs">
+        <header><h2>本帧寄存器</h2><span class="ad" id="regCount">0 处写入</span></header>
+        <div class="body" id="regBody"></div>
+      </section>
+    </div>
+
+    <div class="flowbar idle" id="flowbar">
+      <div class="grid"></div>
+      <div class="dot"></div>
+      <div class="lbl" id="flowLbl">—</div>
+    </div>
+
+    <div class="logger">
+      <div class="lh"><span>事件日志</span><span class="mode" id="logMode">复位后时间轴</span></div>
+      <div class="lines" id="logLines"></div>
+    </div>
+    <div class="foot">
+      <span>操作：空格 播放/暂停 · ←/→ 单步 · Home 回到开头</span>
+      <span class="w">⚠ = 示意值，需以 RM0456 / 你的 .map 核对</span>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   数据：36 帧 / 11 章
+   ch 章节号, t 毫秒(复位后), title, narr, regs[], writes[],
+   mem 状态增量, hl 高亮, flow 数据流, sp 栈指针
+   ============================================================ */
+
+const CHAPTERS = [
+  {no:0, name:"复位与上电初态"},
+  {no:1, name:"启动入口选择"},
+  {no:2, name:"CM33 复位取向量"},
+  {no:3, name:"Reset_Handler 首条指令"},
+  {no:4, name:"SystemInit"},
+  {no:5, name:"进入 __main 之前"},
+  {no:6, name:"分散加载 scatter-loading"},
+  {no:7, name:"C 库初始化"},
+  {no:8, name:"进入 main()"},
+  {no:9, name:"对照：TZEN=1 安全启动"},
+  {no:10, name:"附录：复位标志与卡死点"}
+];
+
+function R(n,a,op,b,af,bits){return {n,a,op,b,af,bits:bits||[]};}
+
+const FRAMES = [
+/* ---------------- CH0 ---------------- */
+{
+  ch:0, t:0.00, title:"VDD 上电，POR / BOR 把芯片按在复位里",
+  narr:"VDD 上升 → <b>POR</b>（上电复位）与 <b>BOR</b>（欠压复位）先保持复位。等 VDD 越过 BOR 阈值、内部稳压与 MSI 稳定后，复位才释放。<br>此刻 CPU 一条指令都没执行：Flash 里已经躺着你的程序（非易失），而 SRAM 里是<b>随机值</b>。复位来源记录在 <code>RCC_CSR</code> —— U5 没有独立的 POR 标志，<code>BORRSTF</code> 同时覆盖 POR、BOR 和退出 Shutdown 三种情况。",
+  regs:[R("RCC_CSR","RCC 基址 0x4602_0000","硬件置位（只读）","0x0000_0000","BORRSTF=1",[
+    {k:"BORRSTF",v:"0→1",on:1},{k:"PINRSTF",v:"?",on:2},{k:"OBLRSTF",v:"0",on:0},
+    {k:"SFTRSTF",v:"0",on:0},{k:"IWDGRSTF",v:"0",on:0},{k:"RMVF",v:"0",on:0}
+  ])],
+  writes:["[hw] VDD 越过 BOR 阈值","[hw] RCC_CSR.BORRSTF = 1","[hw] RCC_CSR.PINRSTF = 1（若 NRST 被外部拉低过）","[hw] 复位释放，CPU 开始取指"],
+  mem:{}, hl:["f-vt"], flow:null
+},
+{
+  ch:0, t:0.08, title:"复位默认时钟：MSI 4 MHz",
+  narr:"复位后系统时钟既不是 HSE 也不是 PLL，而是内部 <b>MSI 的 4 MHz</b>（MSISRANGE=0000）。<code>RCC_CFGR1</code> 复位为 0：SW=MSIS，HPRE / PPRE1 / PPRE2 / PPRE3 全为 /1。<br>于是 SYSCLK = HCLK = PCLK1 = PCLK2 = PCLK3 = <b>4 MHz</b>。后面所有“毫秒”都按 4 MHz 估算 —— 这就是启动阶段感觉慢的原因。",
+  regs:[
+    R("RCC_CR","0x4602_0000","读（复位默认值）","MSISON=1, MSIRDY=1","保持 MSI 为系统时钟",[
+      {k:"MSISON",v:"1",on:0},{k:"MSIRDY",v:"1",on:0},{k:"HSEON",v:"0",on:0},{k:"PLL1ON",v:"0",on:0}
+    ]),
+    R("RCC_CFGR1","0x4602_001C ⚠","读（复位默认值）","0x0000_0000","SW=MSIS · 全 /1",[
+      {k:"SW",v:"00 = MSIS",on:0},{k:"HPRE",v:"/1",on:0},{k:"PPRE1",v:"/1",on:0},{k:"PPRE2",v:"/1",on:0}
+    ])
+  ],
+  writes:["[hw] SYSCLK ← MSI 4 MHz","[hw] HCLK = PCLK1/2/3 = 4 MHz"],
+  mem:{}, hl:[], flow:"MSI 4 MHz → SYSCLK → HCLK / PCLK1-3（全 /1）"
+},
+{
+  ch:0, t:0.15, title:"默认电压档 / Flash 等待周期 / ICACHE 关闭",
+  narr:"<code>PWR_VOSR</code> 的 VOS=00，即 <b>Range 4</b>：复位后的最低电压档，只够 4 MHz 级运行（升到 160 MHz 必须先升到 Range 1）。<br><code>FLASH_ACR</code> 的 LATENCY=0000，即 <b>0 个等待周期</b> —— 4 MHz 下 Flash 完全跟得上。<br><code>ICACHE->CR</code> 的 EN=0：缓存默认关闭，整个启动过程每次取指都直接访问 Flash。",
+  regs:[
+    R("PWR_VOSR","PWR 基址 0x4602_0800 ⚠","复位默认值","VOS=00, VOSRDY=1","Range 4",[
+      {k:"VOS",v:"00 = Range 4",on:0},{k:"VOSRDY",v:"1",on:0},{k:"LDOEN",v:"1",on:0}
+    ]),
+    R("FLASH_ACR","0x4002_2000","复位默认值","0x0000_0000","LATENCY = 0 WS",[
+      {k:"LATENCY",v:"0000",on:0},{k:"PRFTEN",v:"0",on:0},{k:"ICRST",v:"0",on:0}
+    ]),
+    R("ICACHE_CR","ICACHE 基址 0x4003_0400 ⚠","复位默认值","EN=0","缓存关闭",[
+      {k:"EN",v:"0",on:0},{k:"CA",v:"0",on:0},{k:"REN",v:"0",on:0}
+    ])
+  ],
+  writes:["[hw] VOS = Range 4","[hw] FLASH_ACR.LATENCY = 0 WS","[hw] ICACHE_CR.EN = 0"],
+  mem:{}, hl:[], flow:null
+},
+
+/* ---------------- CH1 ---------------- */
+{
+  ch:1, t:0.20, title:"采样 BOOT0 与选项位：从哪启动？",
+  narr:"TZEN=0 时启动入口由 <code>FLASH_OPTR</code> 与 BOOT0 引脚共同决定：<br>· <code>nSWBOOT0=1</code> → 用 <b>BOOT0 引脚</b>：0 → <code>NSBOOTADD0</code>（本例 0x0800_0000），1 → <code>NSBOOTADD1</code>（0x0BF9_0000 系统存储器）。<br>· <code>nSWBOOT0=0</code> → 用选项位 <code>nBOOT0</code>，引脚不再参与。<br><code>BOOT_LOCK=1</code> 会锁死这个选择。<b>搞错 BOOT0，你的程序就从来没运行过</b> —— 芯片进了 ST Bootloader。",
+  regs:[R("FLASH_OPTR","0x4002_2020","硬件采样（只读）","nSWBOOT0=1, TZEN=0","BOOT0=0 → NSBOOTADD0",[
+    {k:"nSWBOOT0",v:"1",on:1},{k:"nBOOT0",v:"x（不参与）",on:0},{k:"BOOT_LOCK",v:"0",on:0},
+    {k:"TZEN",v:"0",on:1},{k:"RDP",v:"0xAA",on:0}
+  ])],
+  writes:["[hw] 采样 BOOT0 引脚 = 0","[hw] 读 FLASH_OPTR.nSWBOOT0 = 1","[hw] 选定 NSBOOTADD0 = 0x0800_0000"],
+  mem:{}, hl:["f-opt"], flow:"BOOT0 = 0 ─▶ NSBOOTADD0 = 0x0800_0000（主 Flash）"
+},
+{
+  ch:1, t:0.24, title:"选项字节的影子加载",
+  narr:"上电时 Flash 接口会把 OTP 里的选项字节搬进一组<b>影子寄存器</b>；软件读 <code>FLASH_OPTR</code> 读到的是影子值，而不是 OTP 原始阵列。<br>写 <code>FLASH_CR.OBL_LAUNCH</code> 会触发重新加载，<b>并产生一次复位</b> —— 这是“改了选项字节没生效”或“跑着跑着自己重启”的常见来源。本例影子值 NSBOOTADD0 = 0x0800_0000。",
+  regs:[
+    R("FLASH_OPTR","0x4002_2020","硬件加载（影子）","—","nSWBOOT0=1 / TZEN=0 / BOOT_LOCK=0",[
+      {k:"nSWBOOT0",v:"1",on:1},{k:"TZEN",v:"0",on:1},{k:"BOOT_LOCK",v:"0",on:0},{k:"nWRP",v:"全 1",on:0}
+    ]),
+    R("FLASH_NSBOOTADD0","0x4002_2024 ⚠","硬件加载（影子）","—","0x0800_0000",[
+      {k:"NSBOOTADD0[31:8]",v:"0x080000",on:1}
+    ]),
+    R("FLASH_CR","0x4002_2014 ⚠","本流程不写","OBL_LAUNCH=0","保持 0",[
+      {k:"OBL_LAUNCH",v:"0",on:0},{k:"LOCK",v:"0",on:0}
+    ])
+  ],
+  writes:["[hw] OTP 选项字节 → 影子寄存器","[hw] FLASH_NSBOOTADD0 影子 = 0x0800_0000"],
+  mem:{}, hl:["f-opt"], flow:"OTP 阵列 ─▶ FLASH_OPTR / NSBOOTADD0 影子寄存器"
+},
+{
+  ch:1, t:0.30, title:"地址 0 的真相：启动存储区别名",
+  narr:"Cortex-M33 复位时 <code>VTOR=0</code>，只能从 <code>0x0000_0000</code> 取向量。U5 在启动时把<b>所选启动存储区</b>别名到 0 地址：<br>· TZEN=0 → 主 Flash 0x0800_0000 被映射到 0x0000_0000<br>· TZEN=1 → 安全别名 0x0C00_0000<br>所以“0 地址处的向量表”其实就是 Flash 里那份，既不在 RAM，也不是独立 ROM。<b>这也是为什么把代码搬进 SRAM 却忘了改 VTOR 会立刻 HardFault。</b>",
+  regs:[],
+  writes:["[hw] 0x0000_0000 别名 → 0x0800_0000","[hw] CPU 下一次取指走别名地址"],
+  mem:{}, hl:["f-vt"], flow:"0x0000_0000 ─(别名)─▶ 0x0800_0000（主 Flash）"
+},
+
+/* ---------------- CH2 ---------------- */
+{
+  ch:2, t:0.60, title:"第一个字：初始 MSP ← 栈顶",
+  narr:"硬件读 <code>0x0000_0000</code> 的第一个字并写入 <b>MSP</b>。这个值就是启动文件里的 <code>__initial_sp</code>，等于栈区顶部。<br>Keil 启动文件里 <code>Stack_Size EQU 0x400</code>，栈区 0x200B_FC00 – 0x200C_0000，所以 <b>MSP = 0x200C_0000</b>。栈<b>向下</b>生长：压栈时地址减小。",
+  regs:[R("MSP","核心寄存器","硬件加载","0x0000_0000","0x200C_0000",[
+    {k:"__initial_sp",v:"0x200C_0000",on:1},{k:"来源",v:"0x0000_0000",on:0},{k:"8 字节对齐",v:"✓",on:1}
+  ])],
+  writes:["[hw] 读 0x0000_0000 = 0x200C_0000","[hw] MSP ← 0x200C_0000"],
+  mem:{}, hl:["blk-sram3"], flow:"0x0000_0000 ─(读第一字)─▶ MSP = 0x200C_0000", sp:"0x200C_0000"
+},
+{
+  ch:2, t:0.62, title:"第二个字：Reset_Handler 地址（带 Thumb 位）",
+  narr:"硬件读 <code>0x0000_0004</code> 的第二个字并写入 <b>PC</b>。这个字的最低位是 <b>1</b>（Thumb 状态标记），处理器去掉最低位后得到真实指令地址：<code>0x0800_01B9</code> → PC = 0x0800_01B8，<code>EPSR.T=1</code>。<br>如果这个字最低位是 0，M33 会立刻进 HardFault（<code>INVSTATE</code>）。向量表的每个入口都是这个规则。",
+  regs:[R("PC","核心寄存器","硬件加载","0x0000_0000","0x0800_01B8",[
+    {k:"向量值",v:"0x0800_01B9",on:1},{k:"Thumb 位",v:"1",on:1},{k:"EPSR.T",v:"0→1",on:1}
+  ])],
+  writes:["[hw] 读 0x0000_0004 = 0x0800_01B9","[hw] PC ← 0x0800_01B8","[hw] EPSR.T ← 1"],
+  mem:{}, hl:["f-vt","f-text"], flow:"0x0000_0004 ─▶ PC = 0x0800_01B8（Thumb）"
+},
+{
+  ch:2, t:0.70, title:"复位后的寄存器底牌",
+  narr:"M33 复位后这些寄存器有<b>确定值</b>，启动代码可以依赖它们：<code>CPACR=0</code>（FPU 关，碰浮点就 UsageFault）、<code>SAU_CTRL=0</code>（安全属性全交给 IDAU）、<code>MPU_CTRL=0</code>（MPU 关，所有地址可访问）、<code>CONTROL=0</code>（特权级 + MSP）、<code>CCR=0x0000_0200</code>（STKALIGN，栈强制 8 字节对齐）、<code>AIRCR=0xFA05_0000</code>（PRIGROUP=0，无子优先级）。<br>注意 <code>VTOR=0</code> 只是“暂时正确”，它依赖启动别名。",
+  regs:[
+    R("CPACR","0xE000_ED88","复位值","0x0000_0000","FPU 未使能",[{k:"CP10",v:"00",on:0},{k:"CP11",v:"00",on:0}]),
+    R("SAU_CTRL","0xE000_EDD0","复位值","0x0000_0000","SAU 关闭",[{k:"ENABLE",v:"0",on:0},{k:"ALLNS",v:"0",on:0}]),
+    R("MPU_CTRL","0xE000_ED94","复位值","0x0000_0000","MPU 关闭",[{k:"ENABLE",v:"0",on:0},{k:"PRIVDEFENA",v:"0",on:0}]),
+    R("CONTROL","核心寄存器","复位值","0x0000_0000","特权 + MSP",[{k:"nPRIV",v:"0",on:0},{k:"SPSEL",v:"0",on:0},{k:"FPCA",v:"0",on:0}]),
+    R("CCR","0xE000_ED14","复位值","0x0000_0000","0x0000_0200",[{k:"STKALIGN",v:"1",on:1},{k:"UNALIGN_TRP",v:"0",on:0},{k:"DIV_0_TRP",v:"0",on:0}]),
+    R("AIRCR","0xE000_ED0C","复位值","0x0000_0000","0xFA05_0000",[{k:"PRIGROUP",v:"000",on:0},{k:"VECTKEY",v:"0xFA05 读",on:0}]),
+    R("SCB_VTOR","0xE000_ED08","复位值","0x0000_0000","0x0000_0000",[{k:"TBLOFF",v:"0x000000",on:0}])
+  ],
+  writes:["[hw] CPACR = 0","[hw] SAU_CTRL = 0","[hw] MPU_CTRL = 0","[hw] CONTROL/PRIMASK/FAULTMASK = 0","[hw] CCR = 0x0000_0200","[hw] AIRCR = 0xFA05_0000","[hw] VTOR = 0"],
+  mem:{}, hl:["f-vt"], flow:null
+},
+{
+  ch:2, t:0.74, title:"取第一条指令",
+  narr:"PC=0x0800_01B8，取到 <code>LDR R0,=SystemInit</code>。此时 <code>ICACHE_CR.EN=0</code>，没有缓存，每次取指都走 Flash；好在 4 MHz 下 LATENCY=0 WS 够用，不需要插入等待周期。<br>这条指令不执行任何寄存器写 —— 它只是把立即数池里的地址装进 R0。",
+  regs:[R("ICACHE_CR","0x4003_0400 ⚠","读（使能位仍为 0）","EN=0","EN=0 · 直接访问 Flash",[
+    {k:"EN",v:"0",on:0},{k:"命中",v:"无",on:0}
+  ])],
+  writes:["[bus] 取指 0x0800_01B8（ICACHE 未命中路径 / 关闭）"],
+  mem:{}, hl:["f-text"], flow:"Flash 0x0800_01B8 ─▶ CM33 取指单元（ICACHE 关）"
+},
+
+/* ---------------- CH3 ---------------- */
+{
+  ch:3, t:1.02, title:"LDR R0,=SystemInit：从字面量池取函数地址",
+  narr:"<code>LDR Rd,=label</code> 由汇编器翻译成 <b>PC 相对</b>的加载：从本条指令附近的字面量池里取一个 32 位常量到 R0。所以 R0 拿到的是 <code>SystemInit</code> 的<b>入口地址 + Thumb 位</b>（示例 0x0800_0155）。<br>注意它<b>不是</b>从 0x0000_0000 或向量表取的 —— 函数地址在链接时就写死在 Flash 里了。",
+  regs:[R("R0","核心寄存器","LDR R0,=SystemInit","0x0000_0000","0x0800_0155",[
+    {k:"值",v:"SystemInit | 1",on:1},{k:"来源",v:"字面量池",on:0}
+  ])],
+  writes:["[bus] 读字面量池 0x0800_01B8+","[reg] R0 ← 0x0800_0155"],
+  mem:{}, hl:["f-text"], flow:"Flash 字面量池 ─▶ R0"
+},
+{
+  ch:3, t:1.05, title:"BLX R0：跳进 SystemInit",
+  narr:"<code>BLX R0</code> 做两件事：把<b>返回地址</b>（下一条指令，低位置 1）存进 <b>LR</b>，然后把 PC 设为 R0 并去掉最低位。<br>LR = 0x0800_01BF（返回点），PC = 0x0800_0154。从这一刻起，控制权交给 <code>system_stm32u5xx.c</code>。",
+  regs:[
+    R("LR","核心寄存器","BLX R0","0x0000_0000","0x0800_01BF",[{k:"返回地址",v:"0x0800_01BE | 1",on:1}]),
+    R("PC","核心寄存器","BLX R0","0x0800_01B8","0x0800_0154",[{k:"目标",v:"SystemInit",on:1}])
+  ],
+  writes:["[reg] LR ← 0x0800_01BF","[reg] PC ← 0x0800_0154","[bus] 跳转 SystemInit"],
+  mem:{}, hl:["f-text"], flow:"PC 0x0800_01B8 ─▶ SystemInit 0x0800_0154（LR 记录返回点）"
+},
+
+/* ---------------- CH4 SystemInit ---------------- */
+{
+  ch:4, t:1.40, title:"SystemInit #1：打开 FPU（CPACR）",
+  narr:"<code>SCB->CPACR |= 0x00F0_0000</code>：把 <b>CP10 / CP11</b> 置为 0b1111（全访问）。不写这一步，任何一条浮点指令都会进 <b>UsageFault（NOCP）</b> —— 而 FPU 是 M33 可选的，复位后默认关闭。<br>CubeMX 工程里这行在 <code>SystemInit()</code> 里由 <code>__FPU_USED</code> 条件编译控制。",
+  regs:[R("SCB_CPACR","0xE000_ED88","SCB->CPACR |= 0x00F0_0000","0x0000_0000","0x00F0_0000",[
+    {k:"CP10",v:"00→11",on:1},{k:"CP11",v:"00→11",on:1},{k:"字节偏移",v:"bit23:20",on:0}
+  ])],
+  writes:["[wr] SCB->CPACR |= 0x00F0_0000","[wr] CPACR[23:20] = 0b1111"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.52, title:"SystemInit #2：RCC->CR 整字重写，锁定 MSI",
+  narr:"<code>RCC->CR = RCC_CR_MSISON</code> —— 这是<b>整字写入</b>，不是 |=。它把 HSEON、PLL1ON/2ON/3ON 等位一起清掉，只留 MSI 使能。<br>先回到“只有 MSI 在跑”的状态，才能安全地重新配 PLL。MSISRANGE 保持复位值 0000 → 4 MHz。",
+  regs:[R("RCC_CR","0x4602_0000","RCC->CR = RCC_CR_MSISON","MSISON=1（复位值）","0x0000_0400 ⚠",[
+    {k:"MSISON",v:"1",on:1},{k:"MSIRDY",v:"1",on:0},{k:"HSEON",v:"0",on:0},{k:"PLL1ON",v:"0",on:0}
+  ])],
+  writes:["[wr] RCC->CR = RCC_CR_MSISON（整字写）","[wr] 其余使能位被清零"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.60, title:"SystemInit #3：清 HSE / CSS / 三个 PLL",
+  narr:"逐位清 <code>HSEON</code>、<code>CSSON</code>、<code>PLL1ON</code>、<code>PLL2ON</code>、<code>PLL3ON</code>，并轮询各自的 RDY 位直到变 0。<br>上电复位后这些位本来就是 0，这一步是给<b>非上电复位</b>（软件复位、看门狗复位）准备的“安全网”—— 那些情况下 PLL 可能还在跑。",
+  regs:[R("RCC_CR","0x4602_0000","RCC->CR &= ~(HSEON|CSSON|PLL1ON|PLL2ON|PLL3ON)","HSEON=0, PLLxON=0","保持 0",[
+    {k:"HSEON",v:"0",on:0},{k:"CSSON",v:"0",on:0},{k:"PLL1ON",v:"0",on:0},{k:"PLL2ON",v:"0",on:0},{k:"PLL3ON",v:"0",on:0}
+  ])],
+  writes:["[wr] 清 HSEON / CSSON","[wr] 清 PLL1ON / PLL2ON / PLL3ON","[bus] 轮询 HSERDY / PLLxRDY 变 0"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.68, title:"SystemInit #4：PLL1CFGR 清零",
+  narr:"<code>RCC->PLL1CFGR = 0</code>：PLL1 的输入源、分频、倍频全部回默认。这之后如果工程要 160 MHz，才会在 <code>main()</code> 的时钟配置里重新写 PLL1CFGR / PLL1DIVR —— 那已经出了本章范围。",
+  regs:[R("RCC_PLL1CFGR","0x4602_0028 ⚠","RCC->PLL1CFGR = 0","0x0000_0000","0x0000_0000",[
+    {k:"PLL1SRC",v:"00 = MSIS",on:0},{k:"PLL1M",v:"000000",on:0},{k:"PLL1REN",v:"0",on:0}
+  ])],
+  writes:["[wr] RCC->PLL1CFGR = 0"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.76, title:"SystemInit #5：CFGR1 / CFGR2 / CFGR3 清零",
+  narr:"三个分频配置寄存器全部清零：SW=MSIS、HPRE/PPRE1/PPRE2/PPRE3 全 /1、MCO 不分频输出。<br>所以 SystemInit 结束时，系统仍然是 <b>4 MHz</b> —— <b>它从不配置时钟树</b>，只把时钟“归零到安全状态”。真正的 160 MHz 配置发生在 main() 里的 HAL_RCC_ClockConfig（你也可能完全不用 HAL）。",
+  regs:[
+    R("RCC_CFGR1","0x4602_001C ⚠","RCC->CFGR1 = 0","0x0000_0000","SW=MSIS · 全 /1",[
+      {k:"SW",v:"00",on:1},{k:"HPRE",v:"/1",on:1},{k:"PPRE1",v:"/1",on:1}
+    ]),
+    R("RCC_CFGR2","0x4602_0020 ⚠","RCC->CFGR2 = 0","0x0000_0000","0x0000_0000",[{k:"PPRE2",v:"/1",on:1}]),
+    R("RCC_CFGR3","0x4602_0024 ⚠","RCC->CFGR3 = 0","0x0000_0000","0x0000_0000",[{k:"PPRE3",v:"/1",on:1}])
+  ],
+  writes:["[wr] RCC->CFGR1 = 0","[wr] RCC->CFGR2 = 0","[wr] RCC->CFGR3 = 0"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.84, title:"SystemInit #6：CIER 清零",
+  narr:"<code>RCC->CIER = 0</code>：关掉 RCC 的所有中断使能（LSI/LSE/HSI/HSE/PLL 就绪中断等）。复位默认就是 0，这同样是“应对非上电复位”的清理。",
+  regs:[R("RCC_CIER","0x4602_0018 ⚠","RCC->CIER = 0","0x0000_0000","0x0000_0000",[
+    {k:"HSERDYIE",v:"0",on:1},{k:"PLL1RDYIE",v:"0",on:1},{k:"LSERDYIE",v:"0",on:1}
+  ])],
+  writes:["[wr] RCC->CIER = 0"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:4, t:1.92, title:"SystemInit #7：VTOR 重定位到 0x0800_0000",
+  narr:"<code>SCB->VTOR = VECT_TAB_BASE_ADDRESS | VECT_TAB_OFFSET</code> = 0x0800_0000 | 0。<br>在此之前 VTOR=0，靠的是启动别名；<b>从这句开始，异常和中断改从 0x0800_0000 取向量</b>。<br>如果你把向量表搬到 SRAM 或外部存储，要改的是这个宏 —— 而不是往 0 地址 memcpy（0 地址是别名，写不进去也没意义）。",
+  regs:[R("SCB_VTOR","0xE000_ED08","SCB->VTOR = VECT_TAB_BASE_ADDRESS|OFFSET","0x0000_0000","0x0800_0000",[
+    {k:"TBLOFF",v:"0x080000",on:1},{k:"对齐",v:"128 字节 ✓",on:1}
+  ])],
+  writes:["[wr] SCB->VTOR = 0x0800_0000"],
+  mem:{}, hl:["f-vt"], flow:"VTOR 0x0000_0000 ─▶ 0x0800_0000（异常向量改从 Flash 取）"
+},
+
+/* ---------------- CH5 ---------------- */
+{
+  ch:5, t:2.60, title:"返回 Reset_Handler，转入 __main",
+  narr:"SystemInit 用 <code>BX LR</code> 回到 0x0800_01BE。接着 <code>LDR R0,=__main</code> / <code>BLX R0</code>。<br><b>Keil 下不是直接 bl main</b>：<code>__main</code> 是 ARM C 库的启动入口，它先做分散加载（scatter-loading），再进 C 库运行时，最后才调用 main。这是 Keil 与 GCC（__libc_init_array）在启动链上最直观的区别。",
+  regs:[
+    R("PC","核心寄存器","BX LR / BLX __main","SystemInit","__main",[{k:"目标",v:"__main",on:1}]),
+    R("LR","核心寄存器","BLX __main","0x0800_01BF","0x0800_01C7",[{k:"返回点",v:"0x0800_01C6 | 1",on:1}])
+  ],
+  writes:["[reg] PC ← LR（返回 0x0800_01BE）","[reg] LR ← 0x0800_01C7","[reg] PC ← __main"],
+  mem:{}, hl:["f-text"], flow:"Reset_Handler ─▶ __main（C 库启动入口）"
+},
+{
+  ch:5, t:2.64, title:"栈区确认：0x200C_0000 与它的 0x400",
+  narr:"<code>__initial_sp</code> = 0x200C_0000（SRAM3 末尾），<code>Stack_Mem</code> 占 0x200B_FC00 – 0x200C_0000，共 <code>Stack_Size = 0x400</code>。MSP 此刻仍然等于 0x200C_0000，栈里<b>一个字节都还没写</b>。<br>M33 复位时 <code>CCR.STKALIGN=1</code>，栈强制 8 字节对齐 —— 若你把 <code>__initial_sp</code> 手工改成 4 字节对齐的地址，第一次异常压栈就出问题。",
+  regs:[R("MSP","核心寄存器","保持一致","0x200C_0000","0x200C_0000",[
+    {k:"__initial_sp",v:"0x200C_0000",on:1},{k:"Stack_Mem",v:"0x200B_FC00",on:0},{k:"大小",v:"0x400",on:0}
+  ])],
+  writes:["[sym] 栈区 0x200B_FC00 .. 0x200C_0000 (0x400)","[reg] MSP = 0x200C_0000（未变化）"],
+  mem:{stack:0.35}, hl:["blk-sram3","m-stack"], flow:"SRAM3 顶部 ─▶ 栈向下生长", sp:"0x200C_0000"
+},
+
+/* ---------------- CH6 ---------------- */
+{
+  ch:6, t:2.80, title:"__scatterload：读取区域表",
+  narr:"<code>__main</code> 第一件事是分散加载。链接器按 <code>.sct</code> 生成一张<b>区域表</b>：<code>LR_IROM1</code>（0x0800_0000, 2 MB）里的 <code>ER_IROM1</code> 是只读执行区；<code>RW_IRAM1</code>（0x2000_0000, 0x000C_0000）承载 RW + ZI。<br>表项告诉运行时：<b>从哪拷多少字节、把哪段清零</b>。这张表就在 Flash 里，紧跟在代码后面。",
+  regs:[],
+  writes:["[bus] 读 scatter 区域表","[sym] ER_IROM1 → RW_IRAM1 的 copy / zeroinit 描述"],
+  mem:{}, hl:["f-text","f-datainit"], flow:"Flash 区域表 ─▶ __scatterload（决定拷什么）"
+},
+{
+  ch:6, t:2.90, title:"__scatterload_copy：.data 从 Flash 搬到 SRAM1",
+  narr:"源 = Flash 里 <code>.data</code> 的加载地址，目的 = <b>0x2000_0000</b>，长度 = <b>0x200（512 B，示例值）</b>。<br>库函数用 <code>LDM/STM</code> 批量搬运，一次 8 个字（32 B），比逐字节快得多。这就是“全局变量的初值”：Flash 里那份只是<b>副本</b>，运行时用的是 SRAM 里这份，可读可写。",
+  regs:[],
+  writes:["[mem] 0x0801_11B8 → 0x2000_0000","[mem] 长度 0x200，每批 32 B","[bus] AXI：Flash → SRAM1"],
+  mem:{data:0.5}, hl:["f-datainit","blk-sram1","m-data"], flow:"Flash .data 初值 ─▶ SRAM1 0x2000_0000（拷贝 512 B）"
+},
+{
+  ch:6, t:4.20, title:".data 拷贝完成",
+  narr:"512 B 就位。从这一刻起，你在 C 里读写一个<b>带初值</b>的全局变量，访问的是 SRAM1 里的副本，而不是 Flash。<br>反过来说：如果你在启动前用调试器改了 Flash 里的 .data 初值，运行后变量值也会跟着变 —— 因为每次启动都会重新拷一遍。",
+  regs:[],
+  writes:["[mem] .data 512 B 全部落位","[mem] SRAM1 0x2000_0000 .. 0x2000_0200 有效"],
+  mem:{data:1}, hl:["blk-sram1","m-data"], flow:"完成：SRAM1 前 512 B = 全局变量初值"
+},
+{
+  ch:6, t:4.30, title:"__scatterload_zeroinit：.bss 清零",
+  narr:"0x2000_0200 – 0x2000_0A00（<b>2 KB，示例值</b>）全部写 0。C 标准保证未初始化的全局/静态变量为 0，靠的就是这一步 —— <b>不是“上电时 SRAM 自动是 0”</b>。SRAM 上电是随机值。<br>注意 .bss 不占 Flash 空间：它在 Flash 里没有“初值副本”，只在区域表里有一条 zeroinit 记录。",
+  regs:[],
+  writes:["[mem] 0x2000_0200 .. 0x2000_0A00 写 0","[mem] 长度 0x800","[bus] 只写 SRAM，不读 Flash"],
+  mem:{bss:0.5}, hl:["blk-sram1","m-bss"], flow:"SRAM1 0x2000_0200 ─▶ 写 0（2 KB）"
+},
+{
+  ch:6, t:5.60, title:"分散加载结束：RO 留在 Flash",
+  narr:"<code>.text</code> / <code>.rodata</code> <b>不搬运</b>（除非你在 .sct 里显式指定）。运行时通过 AXI/AHB 直接从 Flash 取指、取常量，这就是 XIP。<br>此刻 SRAM1 里有 .data + .bss；SRAM2 / SRAM3 / SRAM4 仍然空着（除了 SRAM3 顶部那 1 KB 栈区预留）。",
+  regs:[],
+  writes:["[mem] .bss 2 KB 清零完成","[bus] RO 段原地执行，不拷贝"],
+  mem:{bss:1}, hl:["f-text","blk-sram1"], flow:".text/.rodata 留在 Flash ─(XIP)─▶ 取指"
+},
+
+/* ---------------- CH7 ---------------- */
+{
+  ch:7, t:5.70, title:"__rt_entry：C 库运行时入口",
+  narr:"分散加载完成后跳到 <code>__rt_entry</code> —— ARM C 库的运行时入口。它负责建立 C 运行环境：栈堆设置、库初始化（<code>__rt_lib_init</code>），然后才调用 <code>main</code>。<br>这一层在 GCC 下没有直接对应物（GCC 是 <code>__libc_init_array</code> + <code>_start</code>），看名字对不上是正常的。",
+  regs:[],
+  writes:["[reg] PC ← __rt_entry"],
+  mem:{}, hl:["f-text"], flow:"__main ─▶ __rt_entry（C 库运行时）"
+},
+{
+  ch:7, t:5.85, title:"__user_setup_stackheap：堆的边界",
+  narr:"库函数把 <b>SP</b> 设为 <code>__initial_sp</code>，并把堆起点放在 ZI 末尾（8 字节对齐）：<b>0x2000_0A00</b>，上限 <code>__heap_limit = 0x2000_0C00</code>（<code>Heap_Size 0x200</code>）。<br>Keil 的堆是 brk 风格：<code>malloc</code> 从这里向上长；栈从 0x200C_0000 向下长。两者之间隔了大半个 SRAM3 —— 但<b>如果栈溢出，会一路踩穿堆</b>，而且不会有任何提示。",
+  regs:[
+    R("MSP","核心寄存器","__user_setup_stackheap","0x200C_0000","0x200C_0000",[{k:"__initial_sp",v:"0x200C_0000",on:1}]),
+    R("__heap_limit","链接符号","堆上限","—","0x2000_0C00",[{k:"堆基址",v:"0x2000_0A00",on:1},{k:"Heap_Size",v:"0x200",on:1}])
+  ],
+  writes:["[sym] heap: 0x2000_0A00 .. 0x2000_0C00","[reg] SP = __initial_sp"],
+  mem:{heap:1}, hl:["blk-sram1","m-heap"], flow:"ZI 末尾 ─▶ heap 起点 0x2000_0A00（向上长）", sp:"0x200C_0000"
+},
+{
+  ch:7, t:6.00, title:"__rt_lib_init：库与静态初始化",
+  narr:"库初始化：堆栈使用申请、标准库初始化、以及 <b>C++ 全局对象的构造函数</b>。这些构造在 <code>main</code> 之前执行，但<b>晚于</b> .data/.bss —— 所以构造函数里访问全局变量是安全的。<br>顺序记住：<code>.data</code> 拷贝 → <code>.bss</code> 清零 → 库/静态构造 → <code>main</code>。",
+  regs:[],
+  writes:["[sys] C 库初始化","[sys] C++ 全局构造（如有）"],
+  mem:{}, hl:[], flow:null
+},
+
+/* ---------------- CH8 ---------------- */
+{
+  ch:8, t:6.30, title:"BL main",
+  narr:"PC ← <code>main</code>（示例 0x0800_02A4），LR 记录返回点（正常情况 main 永不返回）。<br>到这里 C 运行环境完整：向量表（VTOR）、栈、堆、.data、.bss 全部就位，时钟仍是 <b>4 MHz</b>，FPU 已开，ICACHE 仍关。",
+  regs:[
+    R("PC","核心寄存器","BL main","__rt_entry","0x0800_02A4",[{k:"目标",v:"main",on:1}]),
+    R("LR","核心寄存器","BL main","—","0x0800_01C7",[{k:"返回点",v:"main 不应返回",on:0}])
+  ],
+  writes:["[reg] PC ← main","[reg] LR ← 返回点"],
+  mem:{}, hl:["f-text"], flow:"__rt_entry ─▶ main()"
+},
+{
+  ch:8, t:6.35, title:"main() 的第一条指令",
+  narr:"<code>PUSH {r7, lr}</code> + <code>MOV r7, sp</code>：SP 从 0x200C_0000 减 8 → <b>0x200B_FFF0</b>，栈里第一次出现数据（帧指针 + 返回地址）。<br><b>你划定的边界到此为止。</b>再往后：<code>MX_ICACHE_Init()</code> 会置 <code>ICACHE_CR.EN=1</code>，时钟配置会把 4 MHz 抬到 160 MHz（VOS Range 1 + PLL1），那些都在 main() 里。",
+  regs:[R("SP","核心寄存器","PUSH {r7,lr}","0x200C_0000","0x200B_FFF0",[
+    {k:"压栈",v:"8 字节",on:1},{k:"栈内容",v:"r7 + lr",on:1},{k:"对齐",v:"8 ✓",on:1}
+  ])],
+  writes:["[mem] 0x200B_FFF0..0x200B_FFF8 ← r7, lr","[reg] SP ← 0x200B_FFF0"],
+  mem:{stack:0.6}, hl:["blk-sram3","m-stack"], flow:"MSP 0x200C_0000 ─▶ 0x200B_FFF0（栈帧建立）", sp:"0x200B_FFF0"
+},
+
+/* ---------------- CH9 ---------------- */
+{
+  ch:9, t:null, title:"对照：TZEN=1 时从哪启动",
+  narr:"TZEN=1 打开 TrustZone，启动路径换一套：<br>· <code>BOOT_LOCK=1</code> → 只认 <code>SECBOOTADD0</code>（默认 0x0C00_0000）<br>· 否则看 BOOT0/nBOOT0：高 → <b>RSS</b>（0x0FF8_0000，Root Security Services 先跑，验证后再跳）<br>· 低 → <code>SECBOOTADD0</code><br>并且向量表从<b>安全别名</b> 0x0C00_0000 取，不是 0x0800_0000。",
+  regs:[
+    R("FLASH_SECBOOTADD0","0x4002_2028 ⚠","选项字节（只读影子）","—","0x0C00_0000",[
+      {k:"SECBOOTADD0[31:8]",v:"0x0C0000",on:1}
+    ]),
+    R("FLASH_OPTR","0x4002_2020","选项字节（只读影子）","TZEN=1","BOOT_LOCK=0",[
+      {k:"TZEN",v:"1",on:1},{k:"BOOT_LOCK",v:"0",on:0}
+    ])
+  ],
+  writes:["[hw] TZEN=1：安全启动路径","[hw] 入口 = SECBOOTADD0 或 RSS"],
+  mem:{}, hl:["f-opt"], flow:"TZEN=1：0x0C00_0000 / RSS 0x0FF8_0000 ─▶ 安全向量表"
+},
+{
+  ch:9, t:null, title:"对照：SAU / IDAU 与“复位后全是安全”",
+  narr:"TZEN=1 复位后 <code>SAU_CTRL=0</code>（SAU 关闭），安全属性由 <b>IDAU</b> 的硬件固定划分给出；<b>所有 SRAM 复位后都归安全</b>。<br>安全版 <code>SystemInit()</code> 会先调用 <code>TZ_SAU_Setup()</code>：写 <code>SAU_RNR</code> 选区域号、<code>SAU_RBAR</code> 定基址、<code>SAU_RLAR</code> 定范围与 NSC、最后 <code>SAU_CTRL.ENABLE=1</code>。<br>配完才设 <code>VTOR=0x0C00_0000</code>（安全图像）；非安全图像才用 0x0800_0000。",
+  regs:[
+    R("SAU_CTRL","0xE000_EDD0","TZ_SAU_Setup：最后使能","0x0000_0000","ENABLE=1",[
+      {k:"ENABLE",v:"0→1",on:1},{k:"ALLNS",v:"0",on:0}
+    ]),
+    R("SAU_RNR","0xE000_EDD8","选区域号","—","0x0000_0000",[{k:"REGION",v:"0",on:1}]),
+    R("SAU_RBAR","0xE000_EDDC","区域基址","—","0x2000_0000",[{k:"BASE",v:"0x20000000",on:1}]),
+    R("SAU_RLAR","0xE000_EDE0","区域上限 + NSC","—","0x200C_0001",[{k:"LIMIT",v:"0x200C0000",on:1},{k:"NSC",v:"0",on:0}])
+  ],
+  writes:["[wr] SAU_RNR / RBAR / RLAR 配置区域","[wr] SAU_CTRL.ENABLE = 1","[wr] VTOR = 0x0C00_0000"],
+  mem:{}, hl:[], flow:"IDAU 给出固定安全属性 · SAU 可再细分"
+},
+{
+  ch:9, t:null, title:"对照：安全 / 非安全别名一览",
+  narr:"同一块物理存储，在不同视角下有两个地址。TZEN=1 时，<b>安全代码走安全别名，非安全代码走普通别名</b>；跨过去访问会被 IDAU/SAU 拦下（SecureFault）。<br>这张表也是调试时最容易看花眼的地方 —— 调试器显示 0x0800_0000，而 CPU 实际在 0x0C00_0000 执行。",
+  regs:[],
+  writes:["[info] Flash 0x0800_0000 / 0x0C00_0000","[info] SRAM1 0x2000_0000 / 0x3000_0000","[info] SRAM4 0x2800_0000 / 0x3800_0000","[info] 外设 0x4000_0000 / 0x5000_0000"],
+  mem:{}, hl:["f-vt","blk-sram1"], flow:"非安全别名 0x2xxx_xxxx  ⇄  安全别名 0x3xxx_xxxx"
+},
+
+/* ---------------- CH10 ---------------- */
+{
+  ch:10, t:null, title:"附录：复位标志什么时候清",
+  narr:"<code>RCC_CSR</code> 里的标志会<b>一直累积</b>，直到你写 <code>RMVF=1</code> 才一起清掉。所以“读一次判断来源 → 立刻清”是标准做法。<br>常见误判：软件复位（<code>SFTRSTF</code>）或看门狗（<code>IWDGRSTF</code>）之后，如果不清标志，下次冷启动还能看到上次的痕迹，日志就会骗你。",
+  regs:[R("RCC_CSR","0x4602_0C00 ⚠","RCC->CSR |= RCC_CSR_RMVF","BORRSTF=1 …","全部标志清 0",[
+    {k:"RMVF",v:"写 1",on:1},{k:"BORRSTF",v:"1→0",on:1},{k:"PINRSTF",v:"?→0",on:2},{k:"IWDGRSTF",v:"0→0",on:0}
+  ])],
+  writes:["[wr] RCC->CSR |= RCC_CSR_RMVF","[wr] 所有复位标志清零"],
+  mem:{}, hl:[], flow:null
+},
+{
+  ch:10, t:null, title:"附录：启动阶段最常见的 5 个 HardFault",
+  narr:"1) <b>向量表第二个字最低位 = 0</b> → INVSTATE，连 Reset_Handler 都没进。<br>2) <b>__initial_sp 不是 8 字节对齐</b> → 复位或首次异常压栈即失败。<br>3) <b>把代码搬到 SRAM 却没改 VTOR</b> → 异常仍从旧地址取向量，跳到野指针。<br>4) <b>栈溢出</b> → 踩穿 heap 或 .data，表现为“变量莫名变了”而不是崩溃。<br>5) <b>SystemInit 之前就用了浮点</b> → UsageFault/NOCP，因为 CPACR 还没打开。<br>排查入口：<code>SCB_CFSR</code> / <code>SCB_HFSR</code> / <code>SCB_SHCSR</code>，配合 <code>DEMCR.TRCENA</code> 看总线错误。",
+  regs:[
+    R("SCB_CFSR","0xE000_ED28","异常时读","—","按位判因",[
+      {k:"INVSTATE",v:"bit1",on:1},{k:"NOCP",v:"bit19",on:1},{k:"IBUSERR",v:"bit8",on:0},{k:"MMARVALID",v:"bit7",on:0}
+    ]),
+    R("SCB_HFSR","0xE000_ED2C","异常时读","—","FORCED / VECTTBL",[
+      {k:"FORCED",v:"bit30",on:1},{k:"VECTTBL",v:"bit1",on:1}
+    ])
+  ],
+  writes:["[info] 排查顺序：CFSR → HFSR → SHCSR → 栈帧"],
+  mem:{}, hl:[], flow:null
+}
+];
+
+/* ============================================================
+   渲染
+   ============================================================ */
+const $ = id => document.getElementById(id);
+let idx = 0, playing = false, timer = null, speed = 1;
+
+const elRail = $("rail"), elNarr = $("narr"), elRegs = $("regBody"),
+      elFlow = $("flowbar"), elFlowLbl = $("flowLbl"), elLog = $("logLines"),
+      elFill = $("fill"), elKnob = $("knob");
+
+/* --- 章节侧栏 --- */
+function buildRail(){
+  CHAPTERS.forEach(c=>{
+    const frames = FRAMES.map((f,i)=>({f,i})).filter(o=>o.f.ch===c.no);
+    const b = document.createElement("button");
+    b.className = "ch"; b.dataset.ch = c.no;
+    b.innerHTML = `<span class="no">CH${String(c.no).padStart(2,"0")}</span>${c.name}` +
+                  `<span class="pg">${frames.length} 帧 · #${frames[0].i+1}</span>`;
+    b.onclick = ()=> goto(frames[0].i);
+    elRail.appendChild(b);
+  });
+}
+
+/* --- 内存状态累计 --- */
+const MEM_KEYS = ["data","bss","heap","stack"];
+function memStateAt(i){
+  const st = {data:0,bss:0,heap:0,stack:0};
+  for(let k=0;k<=i;k++){
+    const m = FRAMES[k].mem;
+    if(m) MEM_KEYS.forEach(key=>{ if(m[key]!==undefined) st[key]=m[key]; });
+  }
+  return st;
+}
+
+function paintMem(f, st){
+  const map = [["m-data","data"],["m-bss","bss"],["m-heap","heap"],["m-stack","stack"]];
+  map.forEach(([id,key])=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const bar = el.querySelector(".f i");
+    if(bar) bar.style.width = Math.round(st[key]*100) + "%";
+    el.classList.toggle("res", st[key]>0 && st[key]<1);
+  });
+  // 段高亮
+  document.querySelectorAll(".hl").forEach(e=>e.classList.remove("hl"));
+  (f.hl||[]).forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.add("hl");
+    if(el.classList.contains("seg")) el.classList.add("f");
+  });
+  // 栈指针
+  if(f.sp) $("spVal").textContent = f.sp;
+  // SRAM1 备注
+  $("sram1-note").textContent = st.data===0 && st.bss===0
+    ? "复位后为随机值，尚未被 C 运行时接管"
+    : (st.bss===1 ? "已就位：.data 512 B + .bss 2 KB + heap 预留" : "分散加载进行中…");
+}
+
+/* --- 寄存器 --- */
+function regCard(r){
+  const bits = (r.bits||[]).map(b=>
+    `<span class="bit ${b.on===1?"on":b.on===2?"unk":""}">${b.k}<b>${b.v}</b></span>`).join("");
+  return `<div class="reg">
+    <div class="rt"><span class="rn">${r.n}</span><span class="ra">${r.a||""}</span></div>
+    <div class="ro">${r.op}</div>
+    <div class="rv"><span class="b">${r.b}</span><span class="arr">──▶</span><span class="af">${r.af}</span></div>
+    <div class="bits">${bits}</div>
+  </div>`;
+}
+
+/* --- 日志 --- */
+function buildLog(i){
+  const rows = [];
+  for(let k=0;k<=i;k++){
+    const f = FRAMES[k];
+    (f.writes||[]).forEach(w=>{
+      let cls = "hw";
+      if(w.startsWith("[wr]")) cls = "wr";
+      else if(w.startsWith("[mem]")||w.startsWith("[bus]")) cls = "mem";
+      else if(w.startsWith("[sym]")||w.startsWith("[sys]")) cls = "sy";
+      else if(w.startsWith("[reg]")) cls = "wr";
+      else if(w.startsWith("[info]")) cls = "";
+      const t = (f.t==null) ? "  —   " : (f.t.toFixed(2)+" ms");
+      rows.push(`<div class="ln-row ${cls}"><span class="t">${t}</span><span class="m">${w}</span></div>`);
+    });
+  }
+  elLog.innerHTML = rows.join("");
+  elLog.scrollTop = elLog.scrollHeight;
+}
+
+/* --- 主渲染 --- */
+function render(i){
+  const f = FRAMES[i];
+  $("fhCh").textContent = "CH" + String(f.ch).padStart(2,"0");
+  $("fhTitle").textContent = f.title;
+  $("fhTime").textContent = (f.t==null) ? "t = —（对照 / 附录，不占时间轴）" : "t = " + f.t.toFixed(2) + " ms";
+  elNarr.innerHTML = f.narr;
+
+  const regs = f.regs||[];
+  $("regCount").textContent = regs.length ? regs.length + " 处写入 / 读取" : "本帧无寄存器写";
+  elRegs.innerHTML = regs.length ? regs.map(regCard).join("")
+    : `<div class="empty">本帧没有寄存器写入。<br>发生的是总线读、程序跳转或内存搬运 ——<br>看左侧 Flash / SRAM 的高亮块。</div>`;
+
+  paintMem(f, memStateAt(i));
+
+  if(f.flow){
+    elFlow.classList.add("active"); elFlow.classList.remove("idle");
+    elFlowLbl.innerHTML = f.flow;
+  }else{
+    elFlow.classList.remove("active"); elFlow.classList.add("idle");
+    elFlowLbl.textContent = "本帧无数据流（纯寄存器写入 / 等待）";
+  }
+
+  buildLog(i);
+
+  $("cNow").textContent = i+1;
+  $("cAll").textContent = FRAMES.length;
+  const pct = (i/(FRAMES.length-1))*100;
+  elFill.style.width = pct + "%";
+  elKnob.style.left = pct + "%";
+
+  document.querySelectorAll(".ch").forEach(b=>{
+    const ch = +b.dataset.ch;
+    b.classList.toggle("active", ch === f.ch);
+    const first = FRAMES.findIndex(x=>x.ch===ch);
+    b.classList.toggle("done", first < i && ch !== f.ch);
+  });
+}
+
+/* --- 控制 --- */
+function goto(i){
+  idx = Math.max(0, Math.min(FRAMES.length-1, i));
+  render(idx);
+}
+function next(){ if(idx < FRAMES.length-1) goto(idx+1); else pause(); }
+function prev(){ goto(idx-1); }
+
+function updatePlayBtn(){
+  $("lblPlay").textContent = playing ? "暂停" : "播放";
+  $("btnPlay").classList.toggle("on", playing);
+  $("icPlay").innerHTML = playing
+    ? '<path d="M4 2.5h3v11H4zM9.5 2.5h3v11h-3z"/>'
+    : '<path d="M4 2.5v11l9-5.5z"/>';
+}
+function startTimer(){
+  clearInterval(timer);
+  timer = setInterval(()=>{ if(idx < FRAMES.length-1) next(); else pause(); }, 2400/speed);
+}
+function play(){
+  if(idx >= FRAMES.length-1) goto(0);
+  playing = true; updatePlayBtn(); startTimer();
+}
+function pause(){ playing = false; clearInterval(timer); timer=null; updatePlayBtn(); }
+function togglePlay(){ playing ? pause() : play(); }
+
+$("btnPlay").onclick = togglePlay;
+$("btnNext").onclick = ()=>{ pause(); next(); };
+$("btnPrev").onclick = ()=>{ pause(); prev(); };
+$("speed").onchange = e=>{ speed = parseFloat(e.target.value); if(playing) startTimer(); };
+
+$("track").onclick = e=>{
+  const r = e.currentTarget.getBoundingClientRect();
+  const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  pause(); goto(Math.round(p * (FRAMES.length-1)));
+};
+
+document.addEventListener("keydown", e=>{
+  if(e.key === " "){ e.preventDefault(); togglePlay(); }
+  else if(e.key === "ArrowRight"){ e.preventDefault(); pause(); next(); }
+  else if(e.key === "ArrowLeft"){ e.preventDefault(); pause(); prev(); }
+  else if(e.key === "Home"){ e.preventDefault(); pause(); goto(0); }
+});
+
+/* --- 进度条章节刻度 --- */
+(function ticks(){
+  const track = $("track");
+  CHAPTERS.forEach(c=>{
+    const i = FRAMES.findIndex(f=>f.ch===c.no);
+    if(i<=0) return;
+    const d = document.createElement("div");
+    d.className = "tick";
+    d.style.left = ((i/(FRAMES.length-1))*100) + "%";
+    track.appendChild(d);
+  });
+})();
+
+/* --- init --- */
+buildRail();
+render(0);
+</script>
+</body>
+</html>

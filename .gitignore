@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 构建与临时产物
+dist/
+build/
+.tmp/
+*.log
+
+# 运行/截图临时文件
+.screenshots/.tmp/
+
+# 编辑器与 IDE
+.vscode/
+.idea/
+*.swp
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,21 @@
+{
+  "name": "u575-atlas",
+  "version": "1.0.0",
+  "description": "STM32U575 图解图册：启动流程动画与外设互连可视化",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "stm32u575",
+    "cortex-m33",
+    "visualization",
+    "teaching"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STM32U575 外设结构与互连关系图</title>
+<style>
+:root{
+  --bg:#0a0e13; --panel:#101821; --line:#1e2a36; --line2:#263543;
+  --tx:#dce7f2; --mut:#8296aa; --dim:#586b7e;
+  --core:#38d0e0; --mem:#4ade80; --dma:#f87171; --timer:#ff9f45;
+  --analog:#f472b6; --serial:#a78bfa; --gpio:#fbbf24; --sys:#7dd3fc;
+  --sec:#94a3b8; --img:#2dd4bf; --storage:#60a5fa; --accel:#c084fc; --audio:#e879f9;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 600px at 10% -10%,rgba(56,208,224,.06),transparent 60%),
+  radial-gradient(900px 500px at 90% 0%,rgba(255,159,69,.05),transparent 55%),var(--bg);
+  color:var(--tx);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden;font-size:14px}
+
+.topbar{display:flex;align-items:center;gap:13px;padding:9px 16px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(16,24,33,.96),rgba(10,14,19,.86));flex:0 0 auto}
+.logo{width:30px;height:30px;border-radius:8px;border:1px solid rgba(56,208,224,.4);
+  background:linear-gradient(140deg,rgba(56,208,224,.2),rgba(56,208,224,.03));display:grid;place-items:center;
+  color:var(--core);font-family:var(--mono);font-size:11px;font-weight:700}
+.ttl h1{margin:0;font-size:15px;font-weight:650}
+.ttl span{font-size:11.5px;color:var(--mut)}
+.chips{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--mut)}
+.chip.on{color:#9fe9f2;border-color:rgba(56,208,224,.35);background:rgba(56,208,224,.07)}
+
+.toolbar{display:flex;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--line);
+  background:rgba(13,19,26,.72);flex:0 0 auto;flex-wrap:wrap}
+.tb-label{font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-right:2px}
+.layer{appearance:none;border:1px solid var(--line2);background:#131c26;color:var(--mut);
+  font-size:11.5px;padding:4px 9px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:.15s}
+.layer:hover{background:#1a2632;color:var(--tx)}
+.layer .dotc{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.layer.on{color:#eaf6fb;border-color:var(--line2);background:#1b2733}
+.layer[data-layer="bus"].on{border-color:rgba(125,211,252,.45)}
+.layer[data-layer="clk"].on{border-color:rgba(56,208,224,.45)}
+.layer[data-layer="irq"].on{border-color:rgba(167,139,250,.5)}
+.layer[data-layer="trig"].on{border-color:rgba(255,159,69,.5)}
+.layer[data-layer="dma"].on{border-color:rgba(248,113,113,.5)}
+.layer[data-layer="af"].on{border-color:rgba(251,191,36,.5)}
+.layer[data-layer="analog"].on{border-color:rgba(244,114,182,.5)}
+.layer[data-layer="bus"].on .dotc{background:#7dd3fc}
+.layer[data-layer="clk"].on .dotc{background:#38d0e0}
+.layer[data-layer="irq"].on .dotc{background:#a78bfa}
+.layer[data-layer="trig"].on .dotc{background:#ff9f45}
+.layer[data-layer="dma"].on .dotc{background:#f87171}
+.layer[data-layer="af"].on .dotc{background:#fbbf24}
+.layer[data-layer="analog"].on .dotc{background:#f472b6}
+.btn{appearance:none;border:1px solid var(--line2);background:#141d27;color:var(--tx);height:27px;padding:0 10px;
+  border-radius:6px;cursor:pointer;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;transition:.15s}
+.btn:hover{background:#1b2733}
+.btn.on{border-color:rgba(56,208,224,.55);background:rgba(56,208,224,.12);color:#dff6fb}
+.btn.warn.on{border-color:rgba(251,191,36,.6);background:rgba(251,191,36,.12);color:#fde68a}
+.sep{width:1px;height:20px;background:var(--line2);margin:0 3px}
+input[type=search]{background:#0f1720;border:1px solid var(--line2);color:var(--tx);height:27px;border-radius:6px;
+  padding:0 9px;font-size:12px;width:150px;outline:none;font-family:var(--mono)}
+input[type=search]:focus{border-color:rgba(56,208,224,.5)}
+
+.workspace{flex:1;min-height:0;position:relative;overflow:auto;background:
+  linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px) 0 0/100% 34px,
+  linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px) 0 0/34px 100%}
+.canvas{position:relative;min-width:1420px;min-height:100%;padding:14px 18px 26px;
+  display:grid;grid-template-columns:210px 178px minmax(0,1fr);gap:14px;align-items:start}
+#wires{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:3}
+
+.lane{display:flex;flex-direction:column;gap:7px}
+.lane-h{font-size:9.5px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;
+  padding:2px 2px 5px;border-bottom:1px dashed var(--line);margin-bottom:2px;display:flex;gap:6px;align-items:center}
+.lane-h b{color:var(--mut);font-weight:600;letter-spacing:.06em}
+
+.node{position:relative;appearance:none;text-align:left;border:1px solid var(--line);border-left:3px solid var(--dim);
+  background:linear-gradient(180deg,#121b25,#0d141c);border-radius:7px;padding:5px 7px;cursor:pointer;
+  display:flex;flex-direction:column;gap:1px;transition:.14s;font-family:var(--sans);color:var(--tx);z-index:4}
+.node:hover{background:#17222d;border-color:#33475a;transform:translateX(1px)}
+.node .nn{font-family:var(--mono);font-size:11.5px;font-weight:650;letter-spacing:.01em}
+.node .ns{font-size:9.5px;color:var(--mut);line-height:1.3}
+.node .nm2{font-family:var(--mono);font-size:8.5px;color:var(--dim);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node[data-cat="core"]{border-left-color:var(--core)}
+.node[data-cat="mem"]{border-left-color:var(--mem)}
+.node[data-cat="dma"]{border-left-color:var(--dma)}
+.node[data-cat="timer"]{border-left-color:var(--timer)}
+.node[data-cat="analog"]{border-left-color:var(--analog)}
+.node[data-cat="serial"]{border-left-color:var(--serial)}
+.node[data-cat="audio"]{border-left-color:var(--audio)}
+.node[data-cat="gpio"]{border-left-color:var(--gpio)}
+.node[data-cat="sys"]{border-left-color:var(--sys)}
+.node[data-cat="sec"]{border-left-color:var(--sec)}
+.node[data-cat="img"]{border-left-color:var(--img)}
+.node[data-cat="storage"]{border-left-color:var(--storage)}
+.node[data-cat="accel"]{border-left-color:var(--accel)}
+.node.focus{border-color:rgba(56,208,224,.75);box-shadow:0 0 0 1px rgba(56,208,224,.2) inset,0 0 22px -6px rgba(56,208,224,.7);background:#132630;z-index:6}
+.node.path{border-color:rgba(251,191,36,.75);box-shadow:0 0 20px -6px rgba(251,191,36,.7);background:#1d1a10}
+.node.dim{opacity:.22;filter:saturate(.4)}
+.node .masterflag{position:absolute;right:5px;top:4px;font-family:var(--mono);font-size:7.5px;padding:0 3px;
+  border-radius:3px;border:1px solid rgba(248,113,113,.4);color:#fca5a5}
+
+.rightcol{display:flex;flex-direction:column;gap:9px;min-width:0}
+.matrixnode{border:1px solid var(--line2);border-radius:8px;padding:7px 10px;background:
+  linear-gradient(90deg,rgba(125,211,252,.08),rgba(125,211,252,.01));display:flex;align-items:center;gap:9px}
+.matrixnode b{font-family:var(--mono);font-size:11.5px;color:#bfe9ff}
+.matrixnode span{font-size:9.5px;color:var(--mut)}
+
+.section{border:1px solid var(--line);border-radius:9px;background:rgba(13,19,26,.55);overflow:hidden}
+.section>.sh{display:flex;align-items:center;gap:8px;padding:5px 9px;border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.015)}
+.busbadge{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:5px;
+  border:1px solid rgba(125,211,252,.35);color:#bfe9ff;background:rgba(125,211,252,.08);cursor:pointer}
+.busbadge:hover{background:rgba(125,211,252,.16)}
+.sh .meta{font-size:9.5px;color:var(--dim);font-family:var(--mono)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;padding:7px 8px}
+.chips .node{flex:0 0 auto;min-width:104px;max-width:172px}
+.chips .node .ns{display:none}
+
+.hintbar{flex:0 0 auto;display:flex;gap:12px;align-items:center;padding:5px 16px;border-top:1px solid var(--line);
+  font-size:10.5px;color:var(--dim);font-family:var(--mono);background:rgba(9,13,18,.8)}
+.hintbar .k{color:#9fb3c6}
+.hintbar .st{margin-left:auto;color:var(--mut)}
+.hintbar b{color:#dff6fb;font-weight:600}
+
+.safety{flex:0 0 auto;border-top:1px solid var(--line);background:rgba(10,15,21,.9)}
+.safety .sh{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;font-size:11.5px;color:var(--mut)}
+.safety .sh:hover{color:var(--tx)}
+.safety .sh .tag{font-family:var(--mono);font-size:9.5px;padding:1px 6px;border-radius:4px;border:1px solid rgba(148,163,184,.35);color:#cbd5e1}
+.safety .sd{display:none;padding:0 16px 12px;gap:8px;flex-wrap:wrap}
+.safety.open .sd{display:flex}
+.safety .note{font-size:10.5px;color:var(--dim);line-height:1.6;width:100%}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(4,7,10,.72);backdrop-filter:blur(3px);display:none;
+  align-items:center;justify-content:center;z-index:60;padding:24px}
+.overlay.on{display:flex}
+/* 节点详情用"侧边浮窗"，不遮住关系图 */
+.overlay.dock{background:transparent;backdrop-filter:none;pointer-events:none;
+  align-items:flex-start;justify-content:flex-end;padding:64px 14px 14px}
+.overlay.dock .modal{pointer-events:auto;width:390px;max-height:calc(100vh - 96px);
+  box-shadow:0 24px 60px -18px rgba(0,0,0,.9)}
+.overlay.dock .modal .mb{font-size:12px}
+.modal{width:min(920px,96vw);max-height:86vh;overflow:auto;background:linear-gradient(180deg,#111a24,#0b1118);
+  border:1px solid var(--line2);border-radius:12px;box-shadow:0 30px 80px -20px #000}
+.modal .mh{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);
+  background:rgba(16,24,33,.97);z-index:2}
+.modal .mh h3{margin:0;font-size:15px}
+.modal .mh .sub{font-family:var(--mono);font-size:10.5px;color:var(--mut)}
+.modal .mh .x{margin-left:auto;cursor:pointer;border:1px solid var(--line2);background:#141d27;color:var(--mut);
+  width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-size:14px}
+.modal .mb{padding:12px 16px 18px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:12px;margin-bottom:12px}
+.kv .k{color:var(--dim);font-size:11px}
+.kv .v{font-family:var(--mono);font-size:11px;color:#cfe0ee}
+.kv .v.plain{font-family:var(--sans);font-size:12px;color:#c3d2e0}
+.ehead{display:flex;align-items:center;gap:8px;margin:14px 0 6px;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim)}
+.ehead i{flex:1;height:1px;background:var(--line)}
+.erow{display:grid;grid-template-columns:14px 1fr;gap:8px;padding:6px 8px;border:1px solid var(--line);
+  border-radius:6px;margin-bottom:5px;background:rgba(255,255,255,.012);font-size:11.5px}
+.erow .sw{width:7px;height:7px;border-radius:50%;margin-top:5px}
+.erow .who{color:#dbe7f2}
+.erow .lbl{font-family:var(--mono);font-size:10.5px;color:#9fc3d6;margin-top:2px}
+.erow .ev{font-size:10px;color:var(--dim);margin-top:2px}
+.erow.off{opacity:.4}
+.warnflag{color:#fbbf24}
+.mtabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.mtab{border:1px solid var(--line2);background:#131c26;color:var(--mut);padding:4px 10px;border-radius:6px;
+  cursor:pointer;font-size:11.5px}
+.mtab.on{color:#dff6fb;border-color:rgba(56,208,224,.5);background:rgba(56,208,224,.1)}
+table.mx{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:10.5px}
+table.mx th,table.mx td{border:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+table.mx th{background:rgba(255,255,255,.03);color:#bcd3e4;font-weight:600;position:sticky;top:0}
+table.mx td{color:#c9dae8}
+table.mx td.hi{color:#ffd7ac}
+table.mx tr:hover td{background:rgba(56,208,224,.05)}
+.emptycell{color:#3d4d5d}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--mut);padding:8px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:14px;height:0;border-top:2px solid;display:inline-block}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">U5</div>
+  <div class="ttl">
+    <h1>STM32U575 外设结构与互连关系</h1>
+    <span><b id="nodeCountTop">91</b> 个实例 · 6 条总线 · EXTI / 触发链 / GPDMA / 模拟通路 / 中断，逐条可查依据</span>
+  </div>
+  <div class="chips">
+    <span class="chip on">STM32U575ZI</span>
+    <span class="chip">Cortex-M33 · TZEN=0</span>
+    <span class="chip">RM0456 / DS13737</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span class="tb-label">关系层</span>
+  <button class="layer on" data-layer="trig"><span class="dotc"></span>触发链</button>
+  <button class="layer on" data-layer="dma"><span class="dotc"></span>DMA</button>
+  <button class="layer on" data-layer="irq"><span class="dotc"></span>中断</button>
+  <button class="layer on" data-layer="analog"><span class="dotc"></span>模拟</button>
+  <button class="layer" data-layer="bus"><span class="dotc"></span>总线</button>
+  <button class="layer" data-layer="clk"><span class="dotc"></span>时钟门控</button>
+  <button class="layer" data-layer="af"><span class="dotc"></span>引脚 AF</button>
+  <div class="sep"></div>
+  <button class="btn warn" id="btnPath">路径追踪</button>
+  <button class="btn" id="btnMatrix">关系矩阵</button>
+  <button class="btn" id="btnAll">全览连线</button>
+  <div class="sep"></div>
+  <input type="search" id="q" placeholder="搜索外设…">
+  <span class="st" id="stCount" style="margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--dim)"></span>
+</div>
+
+<div class="workspace" id="workspace">
+  <div class="canvas" id="canvas">
+    <svg id="wires"></svg>
+
+    <div class="lane" id="laneCore">
+      <div class="lane-h"><b>内核 / 存储 / 系统</b><span style="margin-left:auto">CORE</span></div>
+    </div>
+
+    <div class="lane" id="laneMaster">
+      <div class="lane-h"><b>总线主设备</b><span style="margin-left:auto">MASTER</span></div>
+    </div>
+
+    <div class="rightcol" id="rightcol">
+      <div class="matrixnode" data-eid="BUSMATRIX">
+        <b>总线矩阵 · 32-bit 多层 AHB + AHB/APB 桥</b>
+        <span>主：CM33（C-AHB 快/慢 + S-AHB）· GPDMA1(×2) · SDMMC1/2 · DMA2D　从：FLASH · SRAM1-3 · AHB1(含 BKPSRAM、APB1/2 桥) · AHB2 · OCTOSPI1/2 · FMC · SRD(AHB3+SRAM4+APB3)</span>
+      </div>
+      <div id="sections"></div>
+    </div>
+  </div>
+</div>
+
+<div class="hintbar">
+  <span><span class="k">点击</span> 聚焦节点的上下游</span>
+  <span><span class="k">Shift+点击</span> 或开启「路径追踪」后依次点两端</span>
+  <span><span class="k">Esc</span> 清除</span>
+  <span class="st" id="stHint">默认显示 ③触发 ④中断 ⑤DMA ⑦模拟 四层</span>
+</div>
+
+<div class="safety" id="safety">
+  <div class="sh" id="safetySh">
+    <span style="font-family:var(--mono);color:var(--core)">▸</span>
+    <b style="font-weight:600;color:#cbd5e1">安全域（GTZC1 / GTZC2 / SAU / MPCBB）</b>
+    <span class="tag">TZEN=1 时生效 · 默认折叠</span>
+    <span style="margin-left:auto;font-size:10px;color:var(--dim)">点击展开</span>
+  </div>
+  <div class="sd" id="safetyBody"></div>
+</div>
+
+<div class="overlay" id="ovl">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ============================================================
+   1. 节点：91 个实例  [id, 名称, 说明, 类别, 总线, 时钟使能位, IRQ, master]
+   ============================================================ */
+const RAW_NODES = [
+  // 内核 / 存储
+  ["CM33","Cortex-M33","160 MHz · C-AHB / S-AHB","core","CORE","—","NVIC 内嵌"],
+  ["NVIC","NVIC","IRQ 0–125，实装 121 条","core","CORE","—","—"],
+  ["ICACHE","ICACHE","8 KB 指令缓存","mem","CORE","无 ENR 位","107"],
+  ["DCACHE1","DCACHE1","4 KB 数据缓存","mem","AHB1","AHB1ENR[30]","111"],
+  ["FLASH","FLASH / FLITF","2 MB + OTP","mem","AHB1","AHB1ENR[8]","6 / S:7"],
+  ["SRAM1","SRAM1","192 KB","mem","AHB1","AHB1ENR[31]","—"],
+  ["SRAM2","SRAM2","64 KB · ECC","mem","AHB2","AHB2ENR1[30]","—"],
+  ["SRAM3","SRAM3","512 KB · ECC","mem","AHB2","AHB2ENR1[31]","—"],
+  ["SRAM4","SRAM4","16 KB · SRD","mem","AHB3","AHB3ENR[31]","—"],
+  ["BKPSRAM","BKPSRAM","2 KB 备份 SRAM（另需 PWR DBP）","mem","AHB1","AHB1ENR[28]","—"],
+  // 主设备
+  ["GPDMA1","GPDMA1","16 通道 · 2 主口","dma","AHB1","AHB1ENR[0]","29-36 / 80-87","1"],
+  ["LPDMA1","LPDMA1","4 通道 · SRD 域","dma","AHB3","AHB3ENR[9]","114-117","1"],
+  ["SDMMC1","SDMMC1","自带 IDMA","storage","AHB2","AHB2ENR1[27]","78","1"],
+  ["SDMMC2","SDMMC2","自带 IDMA","storage","AHB2","AHB2ENR1[28]","79","1"],
+  ["OCTOSPI1","OCTOSPI1","外部 NOR / PSRAM（AHB 从口）","storage","AHB2","AHB2ENR2[4]","76"],
+  ["OCTOSPI2","OCTOSPI2","外部存储（AHB 从口）","storage","AHB2","AHB2ENR2[8]","120"],
+  ["FMC","FMC / FSMC","并行外部存储（AHB 从口）","storage","AHB2","AHB2ENR2[0]","75"],
+  ["DCMI","DCMI","摄像头并口","img","AHB2","AHB2ENR1[12]","119"],
+  ["PSSI","PSSI","并行同步接口","img","AHB2","AHB2ENR1[12]","119"],
+  ["DMA2D","DMA2D","2D 图形加速","img","AHB1","AHB1ENR[18]","118","1"],
+  // 系统 / 安全 / 加速
+  ["RCC","RCC","复位与时钟控制","sys","CORE","—","9 / S:10"],
+  ["PWR","PWR","电源 · 电压档","sys","AHB3","AHB3ENR[2]","77 (PWR_S3WU)"],
+  ["SYSCFG","SYSCFG","EXTI/复用配置","sys","APB3","APB3ENR[1]","—"],
+  ["EXTI","EXTI","24 条线（0-23）","sys","CORE","—","11-26 等"],
+  ["RAMCFG","RAMCFG","SRAM ECC / 复位","sys","AHB1","AHB1ENR[17]","5"],
+  ["CRC","CRC","CRC 校验单元","sys","AHB1","AHB1ENR[12]","—"],
+  ["RNG","RNG","真随机数","sec","AHB2","AHB2ENR1[18]","94"],
+  ["HASH","HASH","SHA / HMAC","sec","AHB2","AHB2ENR1[17]","96"],
+  ["GTZC1","GTZC1","TZSC+MPCBB+TZIC","sec","AHB1","AHB1ENR[24]","8"],
+  ["GTZC2","GTZC2","SRD 域安全","sec","AHB3","AHB3ENR[12]","8"],
+  ["RTC","RTC / TAMP","日历 + 防拆","sys","APB3","APB3ENR[21]","2 / S:3 / 4"],
+  ["IWDG","IWDG","独立看门狗","sys","CORE","LSI 常开","27"],
+  ["WWDG","WWDG","窗口看门狗","sys","APB1","APB1ENR1[11]","0"],
+  ["CRS","CRS","时钟恢复系统","sys","APB1","APB1ENR1[24]","74"],
+  ["TSC","TSC","触摸感应","sys","AHB1","AHB1ENR[16]","92"],
+  ["CORDIC","CORDIC","三角/双曲加速","accel","AHB1","AHB1ENR[1]","123"],
+  ["FMAC","FMAC","滤波加速","accel","AHB1","AHB1ENR[2]","124"],
+  // GPIO
+  ["GPIOA","GPIOA","16 引脚","gpio","AHB2","AHB2ENR1[0]","经 EXTI"],
+  ["GPIOB","GPIOB","16 引脚","gpio","AHB2","AHB2ENR1[1]","经 EXTI"],
+  ["GPIOC","GPIOC","16 引脚","gpio","AHB2","AHB2ENR1[2]","经 EXTI"],
+  ["GPIOD","GPIOD","16 引脚","gpio","AHB2","AHB2ENR1[3]","经 EXTI"],
+  ["GPIOE","GPIOE","16 引脚","gpio","AHB2","AHB2ENR1[4]","经 EXTI"],
+  ["GPIOF","GPIOF","16 引脚","gpio","AHB2","AHB2ENR1[5]","经 EXTI"],
+  ["GPIOG","GPIOG","16 引脚","gpio","AHB2","AHB2ENR1[6]","经 EXTI"],
+  ["GPIOH","GPIOH","16 引脚","gpio","AHB2","AHB2ENR1[7]","经 EXTI"],
+  ["GPIOI","GPIOI","8 引脚（PI0–PI7）","gpio","AHB2","AHB2ENR1[8]","经 EXTI"],
+  ["LPGPIO1","LPGPIO1","低功耗 GPIO","gpio","AHB3","AHB3ENR[0]","经 EXTI"],
+  ["PINMUX","AF0–AF15 复用矩阵","逐引脚见 DS13737 Table 27/28","gpio","CORE","—","—"],
+  // 模拟
+  ["ADC1","ADC1","14-bit · 20 通道","analog","AHB2","AHB2ENR1[10]","37"],
+  ["ADC4","ADC4","12-bit · SRD 域","analog","AHB3","AHB3ENR[5]","113"],
+  ["DAC1","DAC1","2 通道 12-bit","analog","AHB3","AHB3ENR[6]","38"],
+  ["COMP1","COMP1","比较器 1","analog","APB3","APB3ENR[15]","72"],
+  ["COMP2","COMP2","比较器 2","analog","APB3","APB3ENR[15]","72"],
+  ["OPAMP1","OPAMP1","运算放大器","analog","APB3","APB3ENR[14]","—"],
+  ["OPAMP2","OPAMP2","运算放大器","analog","APB3","APB3ENR[14]","—"],
+  ["VREFBUF","VREFBUF","参考电压缓冲","analog","APB3","APB3ENR[20]","—"],
+  // 定时器
+  ["TIM1","TIM1","高级 16-bit · 4 通道","timer","APB2","APB2ENR[11]","41-44"],
+  ["TIM8","TIM8","高级 16-bit · 4 通道","timer","APB2","APB2ENR[13]","51-54"],
+  ["TIM2","TIM2","32-bit","timer","APB1","APB1ENR1[0]","45"],
+  ["TIM3","TIM3","32-bit","timer","APB1","APB1ENR1[1]","46"],
+  ["TIM4","TIM4","32-bit","timer","APB1","APB1ENR1[2]","47"],
+  ["TIM5","TIM5","32-bit","timer","APB1","APB1ENR1[3]","48"],
+  ["TIM6","TIM6","基本 16-bit","timer","APB1","APB1ENR1[4]","49"],
+  ["TIM7","TIM7","基本 16-bit","timer","APB1","APB1ENR1[5]","50"],
+  ["TIM15","TIM15","16-bit · 2 通道","timer","APB2","APB2ENR[16]","69"],
+  ["TIM16","TIM16","16-bit · 1 通道","timer","APB2","APB2ENR[17]","70"],
+  ["TIM17","TIM17","16-bit · 1 通道","timer","APB2","APB2ENR[18]","71"],
+  ["LPTIM1","LPTIM1","低功耗定时器","timer","APB3","APB3ENR[11]","67"],
+  ["LPTIM2","LPTIM2","低功耗定时器","timer","APB1","APB1ENR2[5]","68"],
+  ["LPTIM3","LPTIM3","低功耗定时器","timer","APB3","APB3ENR[12]","98"],
+  ["LPTIM4","LPTIM4","低功耗定时器","timer","APB3","APB3ENR[13]","110"],
+  // 串行 / 音频 / USB
+  ["USART1","USART1","最高 160 MHz 时钟","serial","APB2","APB2ENR[14]","61"],
+  ["USART2","USART2","","serial","APB1","APB1ENR1[17]","62"],
+  ["USART3","USART3","","serial","APB1","APB1ENR1[18]","63"],
+  ["UART4","UART4","","serial","APB1","APB1ENR1[19]","64"],
+  ["UART5","UART5","","serial","APB1","APB1ENR1[20]","65"],
+  ["LPUART1","LPUART1","低功耗 UART","serial","APB3","APB3ENR[6]","66"],
+  ["I2C1","I2C1","Fast-mode Plus","serial","APB1","APB1ENR1[21]","55/56"],
+  ["I2C2","I2C2","","serial","APB1","APB1ENR1[22]","57/58"],
+  ["I2C3","I2C3","","serial","APB3","APB3ENR[7]","88/89"],
+  ["I2C4","I2C4","","serial","APB1","APB1ENR2[1]","100/101"],
+  ["SPI1","SPI1","","serial","APB2","APB2ENR[12]","59"],
+  ["SPI2","SPI2","","serial","APB1","APB1ENR1[14]","60"],
+  ["SPI3","SPI3","","serial","APB3","APB3ENR[5]","99"],
+  ["SAI1","SAI1","音频接口 A/B 组","audio","APB2","APB2ENR[21]","90"],
+  ["SAI2","SAI2","音频接口 A/B 组","audio","APB2","APB2ENR[22]","91"],
+  ["MDF1","MDF1","6 个滤波器（ΣΔ）","audio","AHB1","AHB1ENR[3]","102-105 /121-122"],
+  ["ADF1","ADF1","音频数字滤波器","audio","AHB3","AHB3ENR[10]","112"],
+  ["FDCAN1","FDCAN1","CAN-FD","serial","APB1","APB1ENR2[9]","39/40"],
+  ["UCPD1","UCPD1","USB-C PD","serial","APB1","APB1ENR2[23]","106"],
+  ["OTG_FS","OTG_FS","USB 2.0 全速","serial","AHB2","AHB2ENR1[14]","73"]
+];
+const NODES = RAW_NODES.map(a=>({id:a[0],name:a[1],sub:a[2],cat:a[3],bus:a[4],clk:a[5],irq:a[6],master:a[7]==="1"}));
+const byId = Object.fromEntries(NODES.map(n=>[n.id,n]));
+
+const BUSES = [
+  {id:"AHB1", meta:"主矩阵 · GPDMA1 / FLITF / SRAM1"},
+  {id:"AHB2", meta:"主矩阵 · GPIO / ADC1 / SDMMC / OTG"},
+  {id:"AHB3", meta:"SRD 域 · PWR / ADC4 / DAC1 / LPDMA1"},
+  {id:"APB1", meta:"APB 桥 · TIM2-7 / USART2-5 / I2C1-2"},
+  {id:"APB2", meta:"APB 桥 · TIM1/8/15-17 / SPI1 / SAI"},
+  {id:"APB3", meta:"APB 桥 · SPI3 / LPUART1 / I2C3 / LPTIM1-4 / 模拟"}
+];
+const CAT_ORDER = ["timer","analog","gpio","serial","audio","storage","img","sys","sec","accel","mem","core","dma"];
+
+/* ============================================================
+   2. 关系边
+   ============================================================ */
+const EDGES = [];
+const E = (type,a,b,label,ev) => EDGES.push({type,a,b,label,ev});
+
+/* --- ③ 中断：外设 → NVIC（IRQn 已逐个核对 stm32u575xx.h） --- */
+NODES.forEach(n=>{
+  if(!n.irq || n.irq==="—" || n.irq.indexOf("经 EXTI")>=0 || !/\d/.test(n.irq)) return;
+  E("irq", n.id, "NVIC", "IRQ " + n.irq, "stm32u575xx.h IRQn_Type");
+});
+E("irq","GPIOA","EXTI","Px0–Px15 → EXTI0–15","EXTI_EXTICR1–4 选择端口");
+["GPIOB","GPIOC","GPIOD","GPIOE","GPIOF","GPIOG","GPIOH","GPIOI"].forEach(g=>
+  E("irq",g,"EXTI","Px0–Px15 → EXTI0–15","EXTI_EXTICR1–4 选择端口"));
+E("irq","EXTI","NVIC","EXTI0–15 = IRQ 11–26","RM0456 EXTI 章 / 向量表");
+E("irq","PWR","EXTI","EXTI16 = PVD（PVD_PVM = IRQ 1）","EXTI line 16");
+E("irq","COMP1","EXTI","EXTI17 → COMP = IRQ 72","EXTI line 17（可配置）");
+E("irq","COMP2","EXTI","EXTI18 → COMP = IRQ 72","EXTI line 18（可配置）");
+
+/* --- ④ 触发链：定时器 → ADC/DAC（EXTSEL / JEXTSEL / TSEL） --- */
+const T = (a,b,l,ev)=>E("trig",a,b,l,ev);
+T("TIM1","ADC1","规则 CC1=0/CC2=1/CC3=2/TRGO=9/TRGO2=10 · 注入 TRGO=0/CC4=1/TRGO2=8","ADC1_CFGR1.EXTSEL[4:0] / ADC1_JSQR.JEXTSEL[4:0]");
+T("TIM1","ADC4","EXTSEL: TRGO2=0 / CC4=1","ADC4_CFGR1.EXTSEL[2:0]");
+T("TIM1","DAC1","TSEL = 1 (T1_TRGO)","DAC_CR.TSELx[3:0]");
+T("TIM2","ADC1","规则 CC2=3/TRGO=11 · 注入 TRGO=2/CC1=3","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM2","ADC4","EXTSEL = 2 (T2_TRGO)","ADC4_CFGR1.EXTSEL");
+T("TIM2","DAC1","TSEL = 2 (T2_TRGO)","DAC_CR.TSELx");
+T("TIM3","ADC1","规则 TRGO=4/CC4=15 · 注入 CC4=4","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM4","ADC1","规则 CC4=5/TRGO=12 · 注入 TRGO=5","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM4","DAC1","TSEL = 3 (T4_TRGO)","DAC_CR.TSELx");
+T("TIM5","DAC1","TSEL = 4 (T5_TRGO)","DAC_CR.TSELx");
+T("TIM6","ADC1","规则 TRGO=13","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM6","ADC4","EXTSEL = 4 (T6_TRGO)","ADC4_CFGR1.EXTSEL");
+T("TIM6","DAC1","TSEL = 5 (T6_TRGO)","DAC_CR.TSELx");
+T("TIM7","DAC1","TSEL = 6 (T7_TRGO)","DAC_CR.TSELx");
+T("TIM8","ADC1","规则 TRGO=7/TRGO2=8 · 注入 CC4=7/TRGO=9/TRGO2=10","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM8","DAC1","TSEL = 7 (T8_TRGO)","DAC_CR.TSELx");
+T("TIM15","ADC1","规则 TRGO=14","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("TIM15","ADC4","EXTSEL = 3 (T15_TRGO)","ADC4_CFGR1.EXTSEL");
+T("TIM15","DAC1","TSEL = 8 (T15_TRGO)","DAC_CR.TSELx");
+T("LPTIM1","ADC1","规则 CH1=18","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("LPTIM1","ADC4","EXTSEL = 5 (CH1)","ADC4_CFGR1.EXTSEL");
+T("LPTIM1","DAC1","TSEL = 11 (CH1)","DAC_CR.TSELx");
+T("LPTIM2","ADC1","规则 CH1=19","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("LPTIM3","ADC1","规则 CH1=20","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("LPTIM3","ADC4","EXTSEL = 6 (CH2)","ADC4_CFGR1.EXTSEL");
+T("LPTIM3","DAC1","TSEL = 12 (CH1)","DAC_CR.TSELx");
+T("LPTIM4","ADC1","规则 OUT=21","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("EXTI","ADC1","EXTI11=6 / EXTI15=16 · 注入 EXTI15=6","ADC1_CFGR1.EXTSEL / JSQR.JEXTSEL");
+T("EXTI","ADC4","EXTSEL = 7 (EXTI15)","ADC4_CFGR1.EXTSEL");
+T("EXTI","DAC1","TSEL = 13 (EXTI9)","DAC_CR.TSELx");
+
+/* --- ④ 触发链：定时器 ITR 内部触发矩阵（TIMx_SMCR.TS） --- */
+const ITR = {
+  TIM1:{1:"TIM2",2:"TIM3",3:"TIM4",4:"TIM5",5:"TIM8",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM8:{0:"TIM1",1:"TIM2",2:"TIM3",3:"TIM4",4:"TIM5",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM2:{0:"TIM1",2:"TIM3",3:"TIM4",4:"TIM5",5:"TIM8",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM3:{0:"TIM1",1:"TIM2",3:"TIM4",4:"TIM5",5:"TIM8",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM4:{0:"TIM1",1:"TIM2",2:"TIM3",4:"TIM5",5:"TIM8",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM5:{0:"TIM1",1:"TIM2",2:"TIM3",3:"TIM4",5:"TIM8",6:"TIM15",7:"TIM16",8:"TIM17"},
+  TIM15:{0:"TIM1",1:"TIM2",2:"TIM3",3:"TIM4",4:"TIM5",5:"TIM8",7:"TIM16",8:"TIM17"}
+};
+Object.keys(ITR).forEach(slave=>{
+  Object.keys(ITR[slave]).forEach(k=>{
+    const src = ITR[slave][k];
+    const isOc = (k==="7"||k==="8");
+    T(src, slave, "ITR" + k + (isOc ? " (" + src + "_OC1)" : ""), "TIM" + slave.slice(3) + "_SMCR.TS（内部触发选择）");
+  });
+});
+/* TIM16/17 自身无 ITR，只能以 OC1 作为别人的触发源（上面的循环已覆盖） */
+
+/* --- ⑤ DMA：外设 → GPDMA1 / LPDMA1（REQSEL 编号） --- */
+const D = (a,b,l)=>E("dma",a,b,l,"GPDMA1_CxTR2.REQSEL / LPDMA1_CxTR2.REQSEL");
+D("ADC1","GPDMA1","REQSEL = 0");
+D("ADC4","GPDMA1","REQSEL = 1");
+D("ADC4","LPDMA1","REQSEL = 7（与 GPDMA 编号不通用）");
+D("DAC1","GPDMA1","REQSEL = 2（CH1）");
+D("SPI1","GPDMA1","RX = 6 / TX = 7");
+D("I2C1","GPDMA1","RX = 12 / TX = 13");
+D("USART1","GPDMA1","RX = 24 / TX = 25");
+D("SAI1","GPDMA1","A = 36 / B = 37");
+D("SAI2","GPDMA1","A = 38 / B = 39");
+D("TIM1","GPDMA1","CH1 = 42 / UP = 46 / TRIG = 47");
+
+/* --- ⑦ 模拟通路 --- */
+const A = (a,b,l,ev)=>E("analog",a,b,l,ev);
+A("DAC1","COMP1","DAC1_OUT1/OUT2 → COMP1_INM","COMP1_CSR.INMSEL = 0100/0101");
+A("DAC1","COMP2","DAC1_OUT1/OUT2 → COMP2_INM","COMP2_CSR.INMSEL = 0100/0101");
+A("DAC1","ADC4","VIN[21] = DAC1_OUT1/2","ADC4 内部通道表");
+A("DAC1","OPAMP1","DAC1_OUT1 → OPAMP1_VINP","OPAMP1_CSR");
+A("DAC1","OPAMP2","DAC1_OUT2 → OPAMP2_VINP","OPAMP2_CSR");
+A("COMP1","TIM1","ETR1 / BKIN / BKIN2","TIM1_AF1.ETRSEL = 1 · tim_brk_cmp1");
+A("COMP2","TIM1","ETR2 / BKIN2","TIM1_AF1.ETRSEL = 2 · tim_brk_cmp2");
+A("COMP1","TIM8","ETR1 / BKIN / BKIN2","TIM8_AF1.ETRSEL = 1");
+A("COMP2","TIM8","ETR2 / BKIN2","TIM8_AF1.ETRSEL = 2");
+A("COMP1","TIM2","ETR1 / TI1","TIM2_AF1.ETRSEL = 1");
+A("COMP2","TIM2","ETR2 / TI2","TIM2_AF1.ETRSEL = 2");
+A("COMP1","TIM3","ETR1 / TI1","TIM3_AF1.ETRSEL = 1");
+A("COMP2","TIM3","ETR2 / TI2","TIM3_AF1.ETRSEL = 2");
+A("COMP1","TIM4","ETR1 / TI1","TIM4_AF1.ETRSEL = 1");
+A("COMP2","TIM4","ETR2 / TI2","TIM4_AF1.ETRSEL = 2");
+A("COMP1","TIM5","ETR1（TI1 需 TI1SEL=4）","TIM5_AF1.ETRSEL = 1");
+A("COMP2","TIM5","ETR2 / TI2","TIM5_AF1.ETRSEL = 2");
+A("COMP1","LPTIM1","触发输入 6","LPTIM 触发源表");
+A("COMP2","LPTIM1","触发输入 7","LPTIM 触发源表");
+A("TIM1","COMP1","tim1_oc5 → 消隐窗口","COMP1_CSR.BLANKSEL[4:0] = xxxx1");
+A("ADC1","TIM1","AWD1-3 → ETR8-10","TIM1_AF1.ETRSEL = 8/9/10");
+A("ADC4","TIM1","AWD1-3 → ETR11-13","TIM1_AF1.ETRSEL = 11/12/13");
+A("VREFBUF","ADC1","参考电压","VREFBUF_CSR（VREF+ 供 ADC）");
+A("VREFBUF","ADC4","参考电压","VREFBUF_CSR");
+A("VREFBUF","DAC1","DAC 参考","VREFBUF_CSR（VREF+ 供 DAC）");
+A("OPAMP1","ADC1","OPAMP1_VOUT(PA3) → ADC1_IN8","RM Table 359；经 GPIO 引脚");
+A("OPAMP2","ADC4","OPAMP2_VOUT(PB0) → ADC4_IN18","RM Table 359；经 GPIO 引脚");
+
+/* --- ⑥ 引脚 AF（诚实表达：GPIO → AF 矩阵 → 外设，具体编号查 DS） --- */
+["GPIOA","GPIOB","GPIOC","GPIOD","GPIOE","GPIOF","GPIOG","GPIOH","GPIOI","LPGPIO1"].forEach(g=>
+  E("af",g,"PINMUX","16 个 AF 槽（AF0–AF15）","GPIOx_AFRL / GPIOx_AFRH"));
+["USART1","USART2","USART3","UART4","UART5","LPUART1","I2C1","I2C2","I2C3","I2C4","SPI1","SPI2","SPI3",
+ "SAI1","SAI2","FDCAN1","UCPD1","OTG_FS","SDMMC1","SDMMC2","OCTOSPI1","FMC","DCMI","PSSI",
+ "TIM1","TIM2","TIM3","TIM4","TIM5","TIM8","TIM15","TIM16","TIM17","LPTIM1","LPTIM2","LPTIM3","LPTIM4",
+ "ADC1","ADC4","DAC1","COMP1","COMP2","OPAMP1","OPAMP2","MDF1","ADF1"].forEach(p=>
+  E("af","PINMUX",p,"AF 复用（具体 AF 编号见 DS13737 Table 27/28）","数据手册引脚定义表"));
+
+/* --- ① 总线：节点 → 总线 --- */
+NODES.forEach(n=>{
+  if(n.bus==="CORE") return;
+  const ev = n.bus==="AHB1" ? "RCC_AHB1ENR" : n.bus==="AHB2" ? "RCC_AHB2ENR1/2" : n.bus==="AHB3" ? "RCC_AHB3ENR"
+    : n.bus==="APB1" ? "RCC_APB1ENR1/2" : n.bus==="APB2" ? "RCC_APB2ENR" : "RCC_APB3ENR";
+  E("bus", n.id, "bus-" + n.bus, "挂在 " + n.bus, ev);
+});
+/* --- ② 时钟门控：RCC → 外设（用节点里的使能位，不臆造） --- */
+NODES.forEach(n=>{
+  if(!n.clk || !/^[A-Z0-9]+\[/.test(n.clk)) return;
+  E("clk","RCC",n.id,n.clk,"RCC_" + n.clk.split("[")[0]);
+});
+
+/* 安全域（默认折叠，不进主图） */
+const SEC_EDGES = [
+  {type:"sec", a:"GTZC1", b:"CM33", label:"TZIC → GTZC = IRQ 8", ev:"GTZC1_TZIC_IER1"},
+  {type:"sec", a:"GTZC2", b:"CM33", label:"TZIC → GTZC = IRQ 8", ev:"GTZC2_TZIC_IER1"},
+  {type:"sec", a:"GTZC1", b:"SRAM1", label:"MPCBB1 按 512 B 块打安全属性", ev:"GTZC1_MPCBB1_SECCFGR"},
+  {type:"sec", a:"GTZC1", b:"SRAM2", label:"MPCBB1 按 512 B 块打安全属性", ev:"GTZC1_MPCBB1_SECCFGR"},
+  {type:"sec", a:"GTZC1", b:"SRAM3", label:"MPCBB1 按 512 B 块打安全属性", ev:"GTZC1_MPCBB1_SECCFGR"},
+  {type:"sec", a:"GTZC2", b:"SRAM4", label:"MPCBB2（SRD 域）", ev:"GTZC2_MPCBB2_SECCFGR"},
+  {type:"sec", a:"GTZC1", b:"GPDMA1", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC1_TZSC_SECCFGR1–3"},
+  {type:"sec", a:"GTZC2", b:"ADC4", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC2_TZSC_SECCFGR1"},
+  {type:"sec", a:"GTZC2", b:"DAC1", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC2_TZSC_SECCFGR1"},
+  {type:"sec", a:"GTZC2", b:"COMP1", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC2_TZSC_SECCFGR1"},
+  {type:"sec", a:"GTZC2", b:"LPTIM1", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC2_TZSC_SECCFGR1"},
+  {type:"sec", a:"GTZC2", b:"LPUART1", label:"TZSC 逐外设 SEC/PRIV", ev:"GTZC2_TZSC_SECCFGR1"}
+];
+
+/* ============================================================
+   3. 渲染骨架
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const canvas = $("canvas"), svg = $("wires"), sections = $("sections");
+const state = { focus:null, path:[], pathMode:false, layers:new Set(["trig","dma","irq","analog"]), all:false };
+let nodeEls = {};
+
+function el(tag, cls, html){ const d=document.createElement(tag); if(cls)d.className=cls; if(html!=null)d.innerHTML=html; return d; }
+
+function makeNode(n){
+  const b = el("button","node");
+  b.dataset.cat = n.cat;
+  b.dataset.eid = n.id;
+  b.dataset.id = n.id;
+  const meta = [n.clk && n.clk!=="—" ? n.clk : "", n.irq && n.irq!=="—" ? "IRQ "+n.irq : ""].filter(Boolean).join(" · ");
+  b.innerHTML = `<span class="nn">${n.name}</span><span class="ns">${n.sub||""}</span>` +
+    (meta?`<span class="nm2">${meta}</span>`:"") +
+    (n.master?`<span class="masterflag">MASTER</span>`:"");
+  b.onclick = ev => {
+    if(state.pathMode || ev.shiftKey){ pickPath(n.id); } else { focus(n.id); }
+    ev.stopPropagation();
+  };
+  nodeEls[n.id] = b;
+  return b;
+}
+
+/* 左列：内核 + 存储 + 内核私有外设（每个实例只渲染一次） */
+const CORE_IDS = ["CM33","NVIC","ICACHE","RCC","EXTI","IWDG","PINMUX","DCACHE1","FLASH","SRAM1","SRAM2","SRAM3","SRAM4","BKPSRAM"];
+CORE_IDS.forEach(id=>{ $("laneCore").appendChild(makeNode(byId[id])); });
+/* 中列：主设备 */
+const MASTERS = NODES.filter(n=>n.master);
+MASTERS.forEach(n=>$("laneMaster").appendChild(makeNode(n)));
+const RENDERED = new Set(CORE_IDS.concat(MASTERS.map(n=>n.id)));
+
+/* 右列：按总线分组 */
+BUSES.forEach(bus=>{
+  const sec = el("div","section");
+  const sh = el("div","sh");
+  const badge = el("span","busbadge",bus.id);
+  badge.dataset.eid = "bus-"+bus.id;
+  badge.onclick = ()=>{};
+  sh.appendChild(badge);
+  sh.appendChild(el("span","meta",bus.meta));
+  sec.appendChild(sh);
+  const chips = el("div","chips");
+  const list = NODES.filter(n=>n.bus===bus.id && !RENDERED.has(n.id))
+    .sort((a,b)=> CAT_ORDER.indexOf(a.cat)-CAT_ORDER.indexOf(b.cat) || a.id.localeCompare(b.id));
+  list.forEach(n=>chips.appendChild(makeNode(n)));
+  sec.appendChild(chips);
+  sections.appendChild(sec);
+});
+
+/* ============================================================
+   4. 关系图绘制
+   ============================================================ */
+const TYPE_COLOR = {
+  bus:"#7dd3fc", clk:"#38d0e0", irq:"#a78bfa", trig:"#ff9f45",
+  dma:"#f87171", af:"#fbbf24", analog:"#f472b6", sec:"#94a3b8"
+};
+function posOf(id){
+  const e = nodeEls[id] || document.querySelector(`[data-eid="${id}"]`);
+  if(!e) return null;
+  const r = e.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+  return {
+    x: r.left - c.left + canvas.parentElement.scrollLeft,
+    y: r.top - c.top + canvas.parentElement.scrollTop,
+    w: r.width, h: r.height,
+    cx: r.left - c.left + r.width/2 + canvas.parentElement.scrollLeft,
+    cy: r.top - c.top + r.height/2 + canvas.parentElement.scrollTop
+  };
+}
+function edgesOf(id, includeSec){
+  return EDGES.filter(e=>{
+    if(!state.layers.has(e.type) && !state.all) return false;
+    return e.a===id || e.b===id;
+  }).concat(includeSec?SEC_EDGES.filter(e=>e.a===id||e.b===id):[]);
+}
+function draw(list, opts){
+  opts = opts || {};
+  const ws = canvas.parentElement;
+  svg.setAttribute("width", canvas.scrollWidth);
+  svg.setAttribute("height", canvas.scrollHeight);
+  svg.innerHTML = "";
+  const NS = "http://www.w3.org/2000/svg";
+  list.forEach(e=>{
+    const a = posOf(e.a), b = posOf(e.b);
+    if(!a || !b) return;
+    const leftToRight = a.cx < b.cx;
+    const x1 = leftToRight ? a.x + a.w : a.x;
+    const y1 = a.cy;
+    const x2 = leftToRight ? b.x : b.x + b.w;
+    const y2 = b.cy;
+    const dx = Math.max(40, Math.abs(x2-x1)*0.45);
+    const c1 = leftToRight ? x1+dx : x1-dx;
+    const c2 = leftToRight ? x2-dx : x2+dx;
+    const p = document.createElementNS(NS,"path");
+    p.setAttribute("d", `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}`);
+    p.setAttribute("fill","none");
+    p.setAttribute("stroke", TYPE_COLOR[e.type] || "#888");
+    p.setAttribute("stroke-width", opts.bold ? 1.9 : 1.25);
+    p.setAttribute("opacity", opts.alpha || 0.75);
+    if(e.type==="af") p.setAttribute("stroke-dasharray","4 4");
+    if(e.type==="sec") p.setAttribute("stroke-dasharray","2 5");
+    if(opts.pathMode) p.setAttribute("stroke-width", 2.4);
+    svg.appendChild(p);
+    if(!opts.noLabels && list.length <= 26){
+      const t = document.createElementNS(NS,"text");
+      t.setAttribute("x", (x1+x2)/2);
+      t.setAttribute("y", (y1+y2)/2 - 3);
+      t.setAttribute("fill", TYPE_COLOR[e.type] || "#888");
+      t.setAttribute("font-size","8.5");
+      t.setAttribute("font-family","ui-monospace,Consolas,monospace");
+      t.setAttribute("text-anchor","middle");
+      t.textContent = e.label.length > 34 ? e.label.slice(0,32)+"…" : e.label;
+      svg.appendChild(t);
+    }
+  });
+}
+
+/* ============================================================
+   5. 交互：聚焦 / 路径 / 图例
+   ============================================================ */
+function clearMarks(){
+  Object.values(nodeEls).forEach(n=>n.classList.remove("focus","path","dim"));
+}
+function focus(id){
+  state.focus = id; state.path = [];
+  clearMarks();
+  Object.values(nodeEls).forEach(n=>{ if(n.dataset.id!==id) n.classList.add("dim"); });
+  if(nodeEls[id]) nodeEls[id].classList.add("focus");
+  const list = edgesOf(id,false);
+  draw(list, {bold:true, alpha:.9});
+  openNodeModal(id);
+  $("stHint").textContent = `聚焦 ${id} · ${list.length} 条直接关系（已启用层）`;
+}
+function clearFocus(){
+  state.focus = null; state.path = [];
+  clearMarks(); svg.innerHTML = "";
+  closeModal();
+  $("stHint").textContent = "默认显示 ③触发 ④中断 ⑤DMA ⑦模拟 四层";
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("dim"));
+}
+
+/* 路径追踪：BFS（只在已启用的边类型上走，无向） */
+function pickPath(id){
+  if(state.path.length===0){ state.path=[id]; markPath(); $("stHint").textContent=`路径起点 ${id} —— 再 Shift+点击终点`; return; }
+  if(state.path.length===1){
+    if(state.path[0]===id){ state.path=[]; markPath(); return; }
+    state.path.push(id);
+    const chain = findPath(state.path[0], state.path[1]);
+    markPath(chain);
+    if(chain.length){
+      const edges = [];
+      for(let i=0;i<chain.length-1;i++){
+        const e = EDGES.find(x=>state.layers.has(x.type) &&
+          ((x.a===chain[i]&&x.b===chain[i+1])||(x.a===chain[i+1]&&x.b===chain[i])));
+        if(e) edges.push(e);
+      }
+      draw(edges,{pathMode:true,bold:true,alpha:1});
+      $("stHint").textContent = `路径：${chain.join(" → ")}（${edges.length} 跳）`;
+    }else{
+      $("stHint").textContent = `在已启用关系层里找不到 ${state.path[0]} ↔ ${state.path[1]} 的通路`;
+    }
+  }else{
+    state.path=[id]; markPath(); $("stHint").textContent=`路径起点 ${id} —— 再 Shift+点击终点`;
+  }
+}
+function findPath(a,b){
+  const adj = {};
+  EDGES.forEach(e=>{
+    if(!state.layers.has(e.type)) return;
+    (adj[e.a] = adj[e.a]||[]).push(e.b);
+    (adj[e.b] = adj[e.b]||[]).push(e.a);
+  });
+  const prev = {[a]:null}, q=[a];
+  while(q.length){
+    const cur=q.shift();
+    if(cur===b){ const path=[]; let c=cur; while(c){ path.unshift(c); c=prev[c]; } return path; }
+    (adj[cur]||[]).forEach(nx=>{ if(!(nx in prev)){ prev[nx]=cur; q.push(nx); } });
+  }
+  return [];
+}
+function markPath(chain){
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("path","dim"));
+  const ids = chain || state.path;
+  Object.values(nodeEls).forEach(n=>{ if(!ids.includes(n.dataset.id)) n.classList.add("dim"); });
+  ids.forEach(id=>{ if(nodeEls[id]) nodeEls[id].classList.add("path"); });
+}
+
+/* ============================================================
+   6. 弹窗
+   ============================================================ */
+const ovl=$("ovl"), modal=$("modal");
+function closeModal(){ ovl.classList.remove("on","dock"); modal.innerHTML=""; }
+ovl.addEventListener("click", e=>{ if(e.target===ovl) closeModal(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ clearFocus(); } });
+
+function edgeRows(list, cur){
+  if(!list.length) return `<div class="erow"><span class="sw" style="background:#334"></span><div>无（在当前启用的关系层里）</div></div>`;
+  return list.map(e=>{
+    const dir = e.a===cur ? "→" : "←";
+    const other = e.a===cur ? e.b : e.a;
+    const on = state.layers.has(e.type);
+    return `<div class="erow ${on?"":"off"}">
+      <span class="sw" style="background:${TYPE_COLOR[e.type]||"#888"}"></span>
+      <div><div class="who"><span class="warnflag">${dir}</span> ${other}
+        <span style="color:#7f93a6;font-size:10px">[${e.type}]</span></div>
+        <div class="lbl">${e.label}</div>
+        <div class="ev">依据：${e.ev}</div></div>
+    </div>`;
+  }).join("");
+}
+function openNodeModal(id){
+  const n = byId[id];
+  if(!n){ closeModal(); return; }
+  const out = EDGES.filter(e=>e.a===id).concat(SEC_EDGES.filter(e=>e.a===id));
+  const inc = EDGES.filter(e=>e.b===id).concat(SEC_EDGES.filter(e=>e.b===id));
+  modal.innerHTML = `
+    <div class="mh">
+      <div><h3>${n.name}</h3><div class="sub">${n.cat.toUpperCase()} · ${n.bus}</div></div>
+      <div class="x" onclick="closeModal()">✕</div>
+    </div>
+    <div class="mb">
+      <div class="kv">
+        <div class="k">说明</div><div class="v plain">${n.sub||"—"}</div>
+        <div class="k">总线</div><div class="v">${n.bus==="CORE"?"内核私有 / 无总线桥":"挂在 "+n.bus}</div>
+        <div class="k">时钟使能</div><div class="v">${n.clk||"—"}</div>
+        <div class="k">中断</div><div class="v">${n.irq?("IRQ "+n.irq):"—"}</div>
+      </div>
+      <div class="ehead"><span>输出（它 → 谁）</span><i></i><span>${out.length}</span></div>
+      ${edgeRows(out, id)}
+      <div class="ehead"><span>输入（谁 → 它）</span><i></i><span>${inc.length}</span></div>
+      ${edgeRows(inc, id)}
+      <div class="legend">
+        <span><i style="border-color:${TYPE_COLOR.trig}"></i>触发链</span>
+        <span><i style="border-color:${TYPE_COLOR.dma}"></i>DMA</span>
+        <span><i style="border-color:${TYPE_COLOR.irq}"></i>中断</span>
+        <span><i style="border-color:${TYPE_COLOR.analog}"></i>模拟</span>
+        <span><i style="border-color:${TYPE_COLOR.bus}"></i>总线</span>
+        <span><i style="border-color:${TYPE_COLOR.clk}"></i>时钟</span>
+        <span><i style="border-color:${TYPE_COLOR.af};border-top-style:dashed"></i>引脚 AF</span>
+      </div>
+    </div>`;
+  ovl.classList.add("on","dock");
+}
+/* ============================================================
+   7. 关系矩阵（辅助视图）
+   ============================================================ */
+const TRIG_MATRIX = [
+  ["TIM1","CC1=0 / CC2=1 / CC3=2 / TRGO=9 / TRGO2=10","TRGO=0 / CC4=1 / TRGO2=8","TRGO2=0 / CC4=1","TRGO=1"],
+  ["TIM2","CC2=3 / TRGO=11","TRGO=2 / CC1=3","TRGO=2","TRGO=2"],
+  ["TIM3","TRGO=4 / CC4=15","CC4=4","—","—"],
+  ["TIM4","CC4=5 / TRGO=12","TRGO=5","—","TRGO=3"],
+  ["TIM5","—","—","—","TRGO=4"],
+  ["TIM6","TRGO=13","—","TRGO=4","TRGO=5"],
+  ["TIM7","—","—","—","TRGO=6"],
+  ["TIM8","TRGO=7 / TRGO2=8","CC4=7 / TRGO=9 / TRGO2=10","—","TRGO=7"],
+  ["TIM15","TRGO=14","—","TRGO=3","TRGO=8"],
+  ["TIM16 / TIM17","—（只有 OC1 可作其他定时器的 ITR）","—","—","—"],
+  ["LPTIM1","CH1=18","—","CH1=5","CH1=11"],
+  ["LPTIM2","CH1=19","—","—","—"],
+  ["LPTIM3","CH1=20","—","CH2=6","CH1=12"],
+  ["LPTIM4","OUT=21","—","—","—"],
+  ["EXTI","EXTI11=6 / EXTI15=16","EXTI15=6","EXTI15=7","EXTI9=13"]
+];
+const DMA_TABLE = [
+  ["ADC1","GPDMA1","0"],["ADC4","GPDMA1","1"],["ADC4","LPDMA1","7"],
+  ["DAC1 (CH1)","GPDMA1","2"],["SPI1 RX / TX","GPDMA1","6 / 7"],
+  ["I2C1 RX / TX","GPDMA1","12 / 13"],["USART1 RX / TX","GPDMA1","24 / 25"],
+  ["SAI1 A / B","GPDMA1","36 / 37"],["SAI2 A / B","GPDMA1","38 / 39"],
+  ["TIM1 CH1 / UP / TRIG","GPDMA1","42 / 46 / 47"]
+];
+function openMatrix(tab){
+  tab = tab || "trig";
+  const tabs = `<div class="mtabs">
+    <div class="mtab ${tab==="trig"?"on":""}" onclick="openMatrix('trig')">触发矩阵</div>
+    <div class="mtab ${tab==="dma"?"on":""}" onclick="openMatrix('dma')">DMA 请求</div>
+    <div class="mtab ${tab==="irq"?"on":""}" onclick="openMatrix('irq')">中断向量</div>
+  </div>`;
+  let body = "";
+  if(tab==="trig"){
+    body = `<table class="mx"><thead><tr>
+      <th>源</th><th>ADC1 规则组 EXTSEL</th><th>ADC1 注入组 JEXTSEL</th><th>ADC4 EXTSEL</th><th>DAC1 TSEL</th>
+      </tr></thead><tbody>` +
+      TRIG_MATRIX.map(r=>`<tr><td class="hi">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join("") +
+      `</tbody></table>
+      <div class="legend"><span>数字 = 写进 EXTSEL/JEXTSEL/TSEL 的编码值</span>
+      <span class="warnflag">⚠ ADC1 的 17 号编码保留；ADC4 只有 8 个源且无注入组</span></div>`;
+  }else if(tab==="dma"){
+    body = `<table class="mx"><thead><tr><th>外设 / 方向</th><th>控制器</th><th>REQSEL</th></tr></thead><tbody>` +
+      DMA_TABLE.map(r=>`<tr><td class="hi">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("") +
+      `</tbody></table>
+      <div class="legend"><span class="warnflag">⚠ GPDMA1 与 LPDMA1 的 REQSEL 编号是两套体系，同一个数字含义不同</span>
+      <span>其余请求号见 RM0456 GPDMA 请求表；SDMMC 用自带 IDMA，不占 REQSEL</span></div>`;
+  }else{
+    body = `<table class="mx"><thead><tr><th>外设</th><th>IRQn</th><th>总线</th><th>时钟使能</th></tr></thead><tbody>` +
+      NODES.filter(n=>n.irq && n.irq!=="—" && n.irq.indexOf("经 EXTI")<0)
+      .map(n=>`<tr><td class="hi">${n.name}</td><td>${n.irq}</td><td>${n.bus}</td><td>${n.clk}</td></tr>`).join("") +
+      `</tbody></table><div class="legend"><span>EXIT0–15 固定在 11–26；GPDMA1 分两段（29–36 / 80–87）</span></div>`;
+  }
+  modal.innerHTML = `<div class="mh"><div><h3>关系矩阵</h3>
+    <div class="sub">依据 RM0456 各外设 Interconnections 表 · ⚠ 表示推断或需对照手册</div></div>
+    <div class="x" onclick="closeModal()">✕</div></div>
+    <div class="mb">${tabs}${body}</div>`;
+  ovl.classList.remove("dock");
+  ovl.classList.add("on");
+}
+
+/* ============================================================
+   8. 工具栏 / 安全域 / 搜索
+   ============================================================ */
+document.querySelectorAll(".layer").forEach(b=>{
+  b.onclick = ()=>{
+    const t = b.dataset.layer;
+    if(state.layers.has(t)){ state.layers.delete(t); b.classList.remove("on"); }
+    else { state.layers.add(t); b.classList.add("on"); }
+    updateCount();
+    if(state.focus) draw(edgesOf(state.focus,false),{bold:true,alpha:.9});
+  };
+});
+function updateCount(){
+  const on = EDGES.filter(e=>state.layers.has(e.type)).length;
+  $("stCount").textContent = `${NODES.length} 个实例 · ${EDGES.length} 条关系（已启用 ${on}）`;
+  if($("nodeCountTop")) $("nodeCountTop").textContent = NODES.length;
+}
+$("btnPath").onclick = e=>{
+  const on = !e.currentTarget.classList.contains("on");
+  e.currentTarget.classList.toggle("on", on);
+  state.pathMode = on;
+  if(on){ state.path=[]; clearMarks(); svg.innerHTML=""; closeModal();
+    $("stHint").textContent="路径追踪：点击起点，再点击终点（只走已启用的关系层）"; }
+  else { clearFocus(); }
+};
+$("btnMatrix").onclick = ()=>openMatrix("trig");
+$("btnAll").onclick = e=>{
+  state.all = !state.all;
+  e.currentTarget.classList.toggle("on", state.all);
+  if(state.all){
+    const all = EDGES.filter(x=>state.layers.has(x.type));
+    draw(all,{alpha:.28,noLabels:true});
+    $("stHint").textContent = `全览：${all.length} 条线（模糊显示，点击节点可聚焦）`;
+  }else{ svg.innerHTML=""; $("stHint").textContent="默认显示 ③触发 ④中断 ⑤DMA ⑦模拟 四层"; }
+};
+$("q").oninput = e=>{
+  const v = e.target.value.trim().toUpperCase();
+  if(!v){ document.querySelectorAll(".node").forEach(n=>n.classList.remove("dim")); return; }
+  document.querySelectorAll(".node").forEach(n=>{
+    const hit = n.dataset.id.toUpperCase().includes(v) || n.textContent.toUpperCase().includes(v);
+    n.classList.toggle("dim", !hit);
+  });
+};
+
+/* 安全域 */
+const safety = $("safety");
+$("safetySh").onclick = ()=>{
+  safety.classList.toggle("open");
+  if(safety.classList.contains("open") && !$("safetyBody").dataset.done){
+    const body = $("safetyBody");
+    ["GTZC1","GTZC2","RNG","HASH"].forEach(id=>{
+      const n = byId[id];
+      const b = el("button","node",`<span class="nn">${n.name}</span><span class="nm2">${n.clk}</span>`);
+      b.dataset.cat = n.cat;
+      b.onclick = ()=>{
+        modal.innerHTML = `<div class="mh"><div><h3>${n.name}</h3><div class="sub">${n.bus} · 安全域</div></div>
+          <div class="x" onclick="closeModal()">✕</div></div><div class="mb">
+          <div class="kv"><div class="k">说明</div><div class="v plain">${n.sub}</div>
+          <div class="k">时钟</div><div class="v">${n.clk}</div>
+          <div class="k">IRQ</div><div class="v">${n.irq}</div></div>
+          <div class="ehead"><span>安全域关系</span><i></i></div>${edgeRows(SEC_EDGES.filter(e=>e.a===id||e.b===id), id)}
+          <div class="legend"><span>GTZC = TZSC（外设 SEC/PRIV 属性）+ MPCBB（SRAM 分块）+ TZIC（非法访问中断）</span></div>
+        </div>`;
+        ovl.classList.add("on","dock");
+      };
+      body.appendChild(b);
+    });
+    body.appendChild(el("div","note",
+      "GTZC1 管绝大多数外设与 SRAM1/2/3；GTZC2 管 SRD 域（ADC4/DAC1/COMP/OPAMP/LPTIM1·3·4/I2C3/LPUART1/SPI3/ADF1/SRAM4）。"+
+      "GPIO / EXTI / RCC / PWR / RTC / TAMP / FLASH / SYSCFG 属 TZ-aware，用各自寄存器，不归 TZSC。SAU/IDAU 只决定 CPU 视角的存储属性。"));
+    body.dataset.done = "1";
+  }
+};
+
+/* 初始化 */
+updateCount();
+window.addEventListener("resize", ()=>{ if(state.focus) draw(edgesOf(state.focus,false),{bold:true,alpha:.9}); });
+$("workspace").addEventListener("scroll", ()=>{ /* SVG 在内容层内，滚动自动跟随 */ });
+closeModal();
+</script>
+</body>
+</html>
