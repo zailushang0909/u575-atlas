@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIM15/16/17 通用定时器框图与运行逻辑 · STM32U575</title>
+<style>
+:root{
+  --bg:#0a0e13; --panel:#101821; --line:#1e2a36; --line2:#263543;
+  --tx:#dce7f2; --mut:#8296aa; --dim:#586b7e;
+  --core:#38d0e0; --timer:#ff9f45; --trig:#f472b6; --evt:#4ade80;
+  --irq:#a78bfa; --dma:#f87171; --pin:#fbbf24; --bus:#7dd3fc;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;color:var(--tx);font-family:var(--sans);font-size:13px;overflow:hidden;
+  display:flex;flex-direction:column;
+  background:radial-gradient(1100px 560px at 8% -8%,rgba(56,208,224,.06),transparent 60%),
+             radial-gradient(900px 520px at 92% -4%,rgba(255,159,69,.05),transparent 58%),var(--bg)}
+button{font-family:inherit;color:inherit}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(16,24,33,.97),rgba(10,14,19,.9));flex:0 0 auto}
+.logo{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,159,69,.42);display:grid;place-items:center;
+  background:linear-gradient(140deg,rgba(255,159,69,.2),rgba(255,159,69,.03));color:var(--timer);
+  font-family:var(--mono);font-size:10px;font-weight:700}
+.ttl h1{margin:0;font-size:15px;font-weight:650}
+.ttl span{font-size:11px;color:var(--mut)}
+.ttl span b{color:#cfe0ee;font-weight:600}
+.topchips{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--mut)}
+.chip.on{color:#ffd9b0;border-color:rgba(255,159,69,.4);background:rgba(255,159,69,.08)}
+
+.toolbar{display:flex;align-items:center;gap:7px;padding:6px 16px;border-bottom:1px solid var(--line);
+  background:rgba(13,19,26,.75);flex:0 0 auto;flex-wrap:wrap;font-size:11px}
+.tb-lab{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-right:2px}
+.btn{appearance:none;border:1px solid var(--line2);background:#141d27;color:var(--mut);height:25px;padding:0 9px;
+  border-radius:6px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:5px;transition:.15s}
+.btn:hover{background:#1b2733;color:var(--tx)}
+.btn.on{color:#e8f6fb;border-color:rgba(56,208,224,.45);background:rgba(56,208,224,.1)}
+.btn.dev.on{color:#ffd9b0;border-color:rgba(255,159,69,.5);background:rgba(255,159,69,.1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.sep{width:1px;height:18px;background:var(--line2);margin:0 3px}
+.tb-right{margin-left:auto;display:flex;gap:10px;align-items:center;color:var(--dim);font-family:var(--mono);font-size:10px}
+.tb-right b{color:#9fb3c6;font-weight:500}
+
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(560px,1fr) 520px}
+
+/* ---------- 框图 ---------- */
+.dgm{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid var(--line);background:rgba(8,12,17,.35)}
+.dgm-head{display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid var(--line);font-size:10.5px;color:var(--mut)}
+.dgm-head b{color:#cbd5e1;font-weight:600;font-size:11px}
+.dgm-head .src{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.dgm-body{flex:1;min-height:0;overflow:auto;padding:8px 10px 4px;background:
+  linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px) 0 0/100% 28px,
+  linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px) 0 0/28px 100%}
+#bdiag{width:100%;height:auto;display:block;min-width:740px;max-height:100%}
+#bdiag text{font-family:var(--sans);fill:#c9d9e7;font-size:9.5px;pointer-events:none}
+#bdiag .mname{font-size:9px;fill:#d6e5f2}
+#bdiag .msub{font-size:7.8px;fill:#8296aa}
+#bdiag .ext{font-family:var(--mono);font-size:8.6px;fill:#9fb6c9}
+#bdiag .lab{font-family:var(--mono);font-size:7.8px;fill:#87a0b5}
+#bdiag .frame{fill:none;stroke:#2a3a49;stroke-dasharray:3 3}
+#bdiag .mod rect{fill:#111b26;stroke:#2b3d4d;stroke-width:1;rx:3}
+#bdiag .mod{pointer-events:all;cursor:pointer}
+#bdiag .mod:hover rect{stroke:#4d6a80;fill:#15212d}
+#bdiag .mod.ctl rect{fill:#131e29}
+#bdiag .sig{fill:none;stroke:#425565;stroke-width:1.25;marker-end:url(#arw);pointer-events:stroke;cursor:pointer}
+#bdiag .sig.clk{stroke:#2d7c86}
+#bdiag .sig.in{stroke:#8a6c2a}
+#bdiag .sig.out{stroke:#8a5c2f}
+#bdiag .sig.trig{stroke:#8a4a6b}
+#bdiag .sig.evt{stroke:#3f7a55}
+#bdiag .sig.irq{stroke:#6552a0}
+#bdiag .sig.dma{stroke:#8f4444}
+#bdiag .hit{fill:none;stroke:transparent;stroke-width:7;pointer-events:stroke;cursor:pointer}
+#bdiag .sig.hot{stroke-width:2.5;stroke:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.55))}
+#bdiag .mod.hot rect{stroke:#fff;stroke-width:1.6;fill:#1b2a37}
+#bdiag .sig.flow{stroke-dasharray:5 5;animation:dash .55s linear infinite}
+#bdiag.focus .sig{opacity:.16}
+#bdiag.focus .sig.hot{opacity:1}
+#bdiag.focus .mod{opacity:.45}
+#bdiag.focus .mod.hot{opacity:1}
+#bdiag .devhide{display:none}
+#bdiag .sim{fill:#ff9f45;stroke:none;opacity:0}
+#bdiag .sim.on{opacity:1}
+@keyframes dash{to{stroke-dashoffset:-10}}
+.dgm-legend{display:flex;gap:12px;flex-wrap:wrap;padding:5px 14px;border-top:1px solid var(--line);font-size:10px;color:var(--dim);font-family:var(--mono)}
+.dgm-legend span{display:inline-flex;align-items:center;gap:5px}
+.dgm-legend i{width:12px;height:2px;display:inline-block;border-radius:2px}
+.dgm-foot{padding:0 14px 6px;font-size:9.8px;color:var(--dim);line-height:1.5}
+
+/* ---------- 控制台 ---------- */
+.console{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(14,21,29,.9),rgba(9,13,18,.9))}
+.con-head{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line)}
+.con-head b{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:650}
+.devsw{display:flex;gap:4px;margin-left:auto}
+.scene-list{display:flex;gap:5px;flex-wrap:nowrap;padding:7px 10px;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;flex:0 0 auto;scrollbar-width:thin}
+.scene-list::-webkit-scrollbar{height:6px}
+.scene-list::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+.sbtn{flex:0 0 auto;border:1px solid var(--line);background:#111a24;color:var(--mut);border-radius:6px;padding:3px 7px;font-size:10.5px;cursor:pointer;white-space:nowrap}
+.sbtn:hover{border-color:#31485a;color:var(--tx)}
+.sbtn.on{border-color:rgba(255,159,69,.55);background:rgba(255,159,69,.12);color:#ffe0c2}
+.sbtn.dim{opacity:.45}
+.stepcard{padding:8px 12px 6px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.step-top{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.step-top .sname{color:#9fb3c6;font-family:var(--sans);font-size:10.5px}
+.stepcard h3{margin:3px 0 2px;font-size:13.5px;font-weight:650;color:#eef7fd}
+.stepcard p{margin:0 0 5px;font-size:11.6px;line-height:1.62;color:#b9c9d7;min-height:52px}
+.stepcard p code{font-family:var(--mono);font-size:10.8px;color:#ffcf9c;background:rgba(255,159,69,.08);padding:0 3px;border-radius:3px}
+.stepctl{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.stepctl label{font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px}
+input[type=range]{width:74px;accent-color:#38d0e0}
+.hint{margin-top:5px;font-size:10px;color:var(--dim);line-height:1.5;border-left:2px solid #24384a;padding-left:7px;min-height:15px}
+.hint b{color:#8fb4cc;font-weight:600}
+.waves{flex:0 0 auto;padding:4px 12px 0;border-bottom:1px solid var(--line)}
+#wave{width:100%;height:196px;display:block;background:#080d12;border:1px solid var(--line);border-radius:6px}
+.wlegend{display:flex;gap:9px;flex-wrap:wrap;padding:4px 2px 6px;font-size:9.5px;color:var(--dim);font-family:var(--mono)}
+.wlegend span{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.wlegend span.off{opacity:.32}
+.wlegend i{width:10px;height:2px;border-radius:2px;display:inline-block}
+.statrow{display:flex;gap:9px;flex-wrap:wrap;padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--dim);flex:0 0 auto}
+.statrow b{color:#dff0fb;font-weight:600}
+.statrow .f{color:#54687a}
+.statrow .f.on{color:#7ee2a0}
+.statrow .f.warn{color:#ff9f45}
+
+/* ---------- 抽屉 ---------- */
+.drawer{flex:0 0 auto;height:34px;display:flex;flex-direction:column;border-top:1px solid var(--line);background:#0b1117;transition:height .18s}
+.drawer.open{height:44vh}
+.drawer-tabs{display:flex;align-items:center;gap:5px;padding:0 12px;height:33px;flex:0 0 33px}
+.dtab{border:1px solid transparent;background:none;color:var(--dim);font-size:11px;padding:4px 8px;border-radius:5px;cursor:pointer}
+.dtab:hover{color:var(--mut)}
+.dtab.on{color:#dff0fb;border-color:var(--line2);background:#141d27}
+.drawer-tabs .grow{flex:1}
+.drawer-tabs .src{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.drawer-panes{flex:1;min-height:0;position:relative;display:none}
+.drawer.open .drawer-panes{display:block}
+.pane{position:absolute;inset:0;display:none;flex-direction:column;min-height:0}
+.pane.on{display:flex}
+.gbar{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.gbar input{background:#0f1720;border:1px solid var(--line2);color:var(--tx);height:24px;border-radius:5px;padding:0 8px;font-size:11px;width:210px;outline:none;font-family:var(--mono)}
+.gbar input:focus{border-color:rgba(56,208,224,.45)}
+.gfilters{display:flex;gap:4px;flex-wrap:wrap}
+.gf{border:1px solid var(--line);background:#111a24;color:var(--dim);font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer}
+.gf.on{color:#dff0fb;border-color:rgba(56,208,224,.45);background:rgba(56,208,224,.08)}
+.gcount{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.gwrap{flex:1;min-height:0;overflow:auto;padding:0 12px 12px}
+.gwrap::-webkit-scrollbar{width:8px}
+.gwrap::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+table.gt{width:100%;border-collapse:collapse;font-size:10.8px}
+table.gt th{position:sticky;top:0;background:#0e1620;text-align:left;color:#9fb3c6;font-weight:600;font-size:9.6px;
+  letter-spacing:.06em;padding:6px 6px;border-bottom:1px solid var(--line2);z-index:2;white-space:nowrap}
+table.gt td{padding:4px 6px;border-bottom:1px solid #16212c;vertical-align:top;color:#b9cad8;line-height:1.45}
+table.gt tr:hover td{background:rgba(56,208,224,.045)}
+table.gt td.ab{font-family:var(--mono);color:#ffd9b0;white-space:nowrap;cursor:pointer}
+table.gt td.ab:hover{text-decoration:underline}
+table.gt td.en{color:#8fa8bb;font-size:10px}
+table.gt .ty{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid;white-space:nowrap}
+table.gt .ty.clk{color:#7fe6f2;border-color:rgba(56,208,224,.4)}
+table.gt .ty.in{color:#ffd48a;border-color:rgba(251,191,36,.35)}
+table.gt .ty.out{color:#ffb37a;border-color:rgba(255,159,69,.4)}
+table.gt .ty.trig{color:#ffa6cf;border-color:rgba(244,114,182,.4)}
+table.gt .ty.evt{color:#8fe6ac;border-color:rgba(74,222,128,.35)}
+table.gt .ty.irq{color:#c4b1ff;border-color:rgba(167,139,250,.4)}
+table.gt .ty.dma{color:#ff9b9b;border-color:rgba(248,113,113,.4)}
+table.gt .ty.bus{color:#a8dbff;border-color:rgba(125,211,252,.4)}
+table.gt .ty.reg,table.gt .ty.bit{color:#b9c9d7;border-color:#31424f}
+table.gt .ty.concept{color:#9fd6c7;border-color:rgba(45,212,191,.35)}
+.mini{color:var(--dim);font-size:9.6px;font-family:var(--mono)}
+
+/* 寄存器 */
+.regwrap{flex:1;min-height:0;overflow:auto;padding:8px 12px 14px}
+.regwrap::-webkit-scrollbar{width:8px}
+.regwrap::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+.reg{margin-bottom:9px;border:1px solid var(--line);border-radius:7px;background:rgba(15,23,32,.7);overflow:hidden}
+.reg-h{display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line)}
+.reg-h b{font-family:var(--mono);font-size:11px;color:#cfe0ee}
+.reg-h .off{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.reg-h .d{font-size:10px;color:var(--dim);margin-left:auto}
+.bits{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;padding:4px 6px 0}
+.bit{font-family:var(--mono);font-size:8.4px;text-align:center;color:#5f7487;padding:1px 0}
+.fields{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;padding:1px 6px 5px}
+.fld{grid-row:1;border:1px solid #24333f;border-radius:3px;padding:2px 2px;font-family:var(--mono);font-size:8.4px;
+  text-align:center;color:#a9bfd0;background:#111a24;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fld:hover{border-color:#3d566a;color:#e6f4fb}
+.fld.rsv{color:#42525f;background:#0d151d;border-color:#1b2833}
+.fld.hi{border-color:rgba(255,159,69,.7);background:rgba(255,159,69,.14);color:#ffe0c2}
+.fld.v1{box-shadow:inset 0 -2px 0 rgba(56,208,224,.55)}
+.reg-note{font-size:9.6px;color:var(--dim);padding:0 8px 5px;line-height:1.5}
+
+/* 代码 */
+.codewrap{flex:1;min-height:0;overflow:auto;padding:10px 14px 16px}
+.codewrap::-webkit-scrollbar{width:8px}
+.codewrap::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+.codeblk{border:1px solid var(--line);border-radius:7px;margin-bottom:9px;background:#0a1017}
+.codeblk summary{cursor:pointer;padding:6px 10px;font-size:11px;color:#b9cad8;list-style:none}
+.codeblk summary::-webkit-details-marker{display:none}
+.codeblk summary:before{content:'▸ ';color:var(--timer);font-family:var(--mono)}
+.codeblk[open] summary:before{content:'▾ '}
+.codeblk pre{margin:0;padding:8px 12px 12px;font-family:var(--mono);font-size:10.6px;line-height:1.6;color:#a9c6d8;overflow:auto;white-space:pre}
+.codeblk .cap{font-size:10px;color:var(--dim);padding:0 12px 8px;border-top:1px dashed #1b2833;margin-top:2px;line-height:1.55}
+.deliv-note{font-size:10.5px;color:var(--dim);padding:6px 12px 0;line-height:1.6}
+table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;border:1px solid rgba(255,159,69,.35);border-radius:3px;padding:0 3px;margin-left:3px}
+
+/* 悬浮卡 */
+.tip{position:fixed;z-index:99;max-width:330px;background:linear-gradient(180deg,#101a24,#0b1118);border:1px solid #2e4557;
+  border-radius:9px;box-shadow:0 18px 46px -12px rgba(0,0,0,.9);padding:9px 11px;display:none;pointer-events:none}
+.tip.on{display:block}
+.tip .th{display:flex;align-items:baseline;gap:7px;margin-bottom:3px}
+.tip .th b{font-family:var(--mono);font-size:12.5px;color:#ffd9b0}
+.tip .th span{font-size:9px;color:var(--dim);font-family:var(--mono)}
+.tip .zh{font-size:12px;color:#e6f2fa;font-weight:600;margin-bottom:3px}
+.tip .en{font-size:9.8px;color:#8296aa;font-family:var(--mono);margin-bottom:5px}
+.tip .kv{display:grid;grid-template-columns:34px 1fr;gap:2px 7px;font-size:10.4px;line-height:1.55;color:#adc2d3}
+.tip .kv i{color:#5c7284;font-style:normal;font-size:9.5px;font-family:var(--mono);padding-top:1px}
+.tip .use{margin-top:5px;padding-top:5px;border-top:1px dashed #22323f;font-size:10.2px;color:#93aabf;line-height:1.55}
+.tip .note{margin-top:3px;font-size:9.2px;color:#5c7284;font-family:var(--mono)}
+.tip .dev{display:inline-block;margin-top:4px;font-family:var(--mono);font-size:8.6px;color:#ffcf9c;border:1px solid rgba(255,159,69,.35);
+  border-radius:3px;padding:0 4px}
+.hidden{display:none!important}
+@media (max-width:1180px){
+  .main{grid-template-columns:1fr 430px}
+  .stepcard p{min-height:64px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">TIM</div>
+  <div class="ttl">
+    <h1>TIM15 / TIM16 / TIM17 通用定时器 · 框图与运行逻辑</h1>
+    <span>STM32U575RIT6 · <b>RM0456 Rev 5 §56.4 Figure 675</b> · 每个信号的全称 / 来源 / 去向 / 场景均可点击查阅</span>
+  </div>
+  <div class="topchips">
+    <span class="chip on">16 位向上计数</span>
+    <span class="chip">Cortex-M33</span>
+    <span class="chip">p.2342</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span class="tb-lab">设备</span>
+  <button class="btn dev on" data-dev="TIM15">TIM15</button>
+  <button class="btn dev" data-dev="TIM16">TIM16</button>
+  <button class="btn dev" data-dev="TIM17">TIM17</button>
+  <div class="sep"></div>
+  <span class="tb-lab">聚焦</span>
+  <button class="btn" data-focus="all">全部</button>
+  <button class="btn" data-focus="clk">时钟链</button>
+  <button class="btn" data-focus="trig">触发链</button>
+  <button class="btn" data-focus="out">输出链</button>
+  <button class="btn" data-focus="irq">中断 / DMA</button>
+  <div class="sep"></div>
+  <button class="btn" id="btnGlossJump">术语表 <span class="mini">(72)</span></button>
+  <span class="tb-right"><span id="devNote">TIM15：全功能（2 通道 + 从模式 + 主模式）</span></span>
+</div>
+
+<div class="main">
+  <section class="dgm">
+    <div class="dgm-head">
+      <b>Figure 675 · TIM15 block diagram</b>
+      <span>悬停看释义 · 点击信号高亮整条路径</span>
+      <span class="src" id="dgmSrc">按原图拓扑重绘（非等比）</span>
+    </div>
+    <div class="dgm-body">
+      <svg id="bdiag" viewBox="0 0 900 540" aria-label="TIM15 框图">
+        <defs>
+          <marker id="arw" viewBox="0 0 8 8" refX="7.2" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/>
+          </marker>
+        </defs>
+        <rect class="frame" x="100" y="14" width="708" height="510"/>
+
+        <!-- 左侧外部信号 -->
+        <text class="ext" x="8" y="34">tim_ker_ck</text>
+        <text class="ext" x="8" y="70">tim_itr[15:0]</text>
+        <text class="ext" x="8" y="126">tim_it</text>
+        <text class="ext" x="8" y="172">tim_pclk</text>
+        <text class="ext" x="8" y="236">tim_ti1_in[15:0]</text>
+        <text class="ext" x="8" y="316">tim_ti2_in[15:0]</text>
+        <text class="ext" x="8" y="364">tim_cc1_dma</text>
+        <text class="ext" x="8" y="376">tim_upd_dma</text>
+        <text class="ext" x="8" y="388">tim_trg_dma</text>
+        <text class="ext" x="8" y="400">tim_com_dma</text>
+        <text class="ext" x="8" y="466">tim_ocref_clr[7:0]</text>
+        <text class="ext" x="8" y="490">tim_sys_brk</text>
+        <text class="ext" x="8" y="506">TIM_BKIN</text>
+        <text class="ext" x="8" y="522">tim_brk_cmp[8:1]</text>
+
+        <!-- 总线 -->
+        <g class="mod" data-t="tim_pclk" id="m_bus">
+          <rect x="128" y="96" width="16" height="292" rx="3" fill="#0f1a24"/>
+          <text class="msub" transform="translate(138,250) rotate(-90)" text-anchor="middle">32-bit APB 总线</text>
+        </g>
+
+        <!-- IRQ / DMA -->
+        <g class="mod ctl" data-t="irq_if" id="m_irq">
+          <rect x="178" y="104" width="62" height="36"/>
+          <text x="209" y="120" text-anchor="middle" class="mname">IRQ</text>
+          <text x="209" y="131" text-anchor="middle" class="msub">interface</text>
+        </g>
+        <g class="mod ctl" data-t="dma_if" id="m_dma">
+          <rect x="178" y="352" width="62" height="46"/>
+          <text x="209" y="369" text-anchor="middle" class="mname">DMA</text>
+          <text x="209" y="380" text-anchor="middle" class="msub">interface</text>
+        </g>
+
+        <!-- 触发 / 从模式 -->
+        <g class="mod ctl" data-t="trigger_controller" id="m_trigc">
+          <rect x="556" y="20" width="98" height="52"/>
+          <text x="605" y="41" text-anchor="middle" class="mname">Trigger</text>
+          <text x="605" y="53" text-anchor="middle" class="mname">controller</text>
+        </g>
+        <g class="mod ctl v15only" data-t="slave_controller" id="m_slave">
+          <rect x="556" y="72" width="98" height="64"/>
+          <text x="605" y="91" text-anchor="middle" class="mname">Slave mode</text>
+          <text x="605" y="103" text-anchor="middle" class="mname">controller</text>
+          <text x="605" y="118" text-anchor="middle" class="msub">SMS / TS / SMSPE</text>
+        </g>
+
+        <!-- 预分频 / 计数 / 重装 -->
+        <g class="mod" data-t="psc" id="m_psc">
+          <rect x="392" y="148" width="60" height="44"/>
+          <text x="422" y="167" text-anchor="middle" class="mname">PSC</text>
+          <text x="422" y="179" text-anchor="middle" class="msub">prescaler</text>
+        </g>
+        <g class="mod" data-t="cnt" id="m_cnt">
+          <rect x="478" y="148" width="68" height="44"/>
+          <text x="512" y="167" text-anchor="middle" class="mname">CNT</text>
+          <text x="512" y="179" text-anchor="middle" class="msub">16-bit up counter</text>
+        </g>
+        <g class="mod" data-t="arr" id="m_arr">
+          <rect x="478" y="94" width="120" height="32"/>
+          <text x="538" y="108" text-anchor="middle" class="mname">Auto-reload register</text>
+          <text x="538" y="120" text-anchor="middle" class="msub">ARR · 影子 / 预装载</text>
+        </g>
+        <g class="mod" data-t="rep" id="m_rep">
+          <rect x="636" y="94" width="106" height="32"/>
+          <text x="689" y="108" text-anchor="middle" class="mname">Repetition counter</text>
+          <text x="689" y="120" text-anchor="middle" class="msub">RCR / REP[7:0]</text>
+        </g>
+
+        <!-- 输入通道 -->
+        <g class="mod" data-t="xor" id="m_xor">
+          <rect x="240" y="218" width="30" height="30"/>
+          <text x="255" y="237" text-anchor="middle" class="mname">XOR</text>
+        </g>
+        <g class="mod" data-t="ti1f" id="m_ti1f">
+          <rect x="284" y="196" width="88" height="60"/>
+          <text x="328" y="214" text-anchor="middle" class="mname">TI1 input filter</text>
+          <text x="328" y="226" text-anchor="middle" class="mname">&amp; edge detector</text>
+          <text x="328" y="242" text-anchor="middle" class="msub">IC1F · CC1P · CKD</text>
+        </g>
+        <g class="mod v15only" data-t="ti2f" id="m_ti2f">
+          <rect x="284" y="286" width="88" height="60"/>
+          <text x="328" y="304" text-anchor="middle" class="mname">TI2 input filter</text>
+          <text x="328" y="316" text-anchor="middle" class="mname">&amp; edge detector</text>
+          <text x="328" y="332" text-anchor="middle" class="msub">IC2F · CC2P · CKD</text>
+        </g>
+        <g class="mod" data-t="ic1ps" id="m_ic1ps">
+          <rect x="392" y="206" width="60" height="34"/>
+          <text x="422" y="227" text-anchor="middle" class="mname">Prescaler</text>
+        </g>
+        <g class="mod v15only" data-t="ic2ps" id="m_ic2ps">
+          <rect x="392" y="296" width="60" height="34"/>
+          <text x="422" y="317" text-anchor="middle" class="mname">Prescaler</text>
+        </g>
+
+        <!-- 捕获/比较 -->
+        <g class="mod" data-t="ccr1" id="m_ccr1">
+          <rect x="574" y="194" width="112" height="42"/>
+          <text x="630" y="211" text-anchor="middle" class="mname">Capture/Compare</text>
+          <text x="630" y="223" text-anchor="middle" class="mname">1 register</text>
+          <text x="630" y="232" text-anchor="middle" class="msub">CCR1 · 影子</text>
+        </g>
+        <g class="mod v15only" data-t="ccr2" id="m_ccr2">
+          <rect x="574" y="282" width="112" height="42"/>
+          <text x="630" y="299" text-anchor="middle" class="mname">Capture/Compare</text>
+          <text x="630" y="311" text-anchor="middle" class="mname">2 register</text>
+          <text x="630" y="320" text-anchor="middle" class="msub">CCR2 · 影子</text>
+        </g>
+
+        <!-- 死区 / 输出 -->
+        <g class="mod" data-t="dtg_reg" id="m_dtg_reg">
+          <rect x="700" y="150" width="74" height="32"/>
+          <text x="737" y="165" text-anchor="middle" class="mname">DTG registers</text>
+          <text x="737" y="176" text-anchor="middle" class="msub">BDTR.DTG[7:0]</text>
+        </g>
+        <g class="mod" data-t="dtg" id="m_dtg">
+          <rect x="700" y="200" width="42" height="40"/>
+          <text x="721" y="218" text-anchor="middle" class="mname">DTG</text>
+          <text x="721" y="230" text-anchor="middle" class="msub">dead-time</text>
+        </g>
+        <g class="mod" data-t="output_control" id="m_oc1">
+          <rect x="766" y="190" width="62" height="62"/>
+          <text x="797" y="212" text-anchor="middle" class="mname">Output</text>
+          <text x="797" y="224" text-anchor="middle" class="mname">control</text>
+          <text x="797" y="238" text-anchor="middle" class="msub">CH1</text>
+        </g>
+        <g class="mod v15only" data-t="output_control" id="m_oc2">
+          <rect x="766" y="284" width="62" height="58"/>
+          <text x="797" y="306" text-anchor="middle" class="mname">Output</text>
+          <text x="797" y="318" text-anchor="middle" class="mname">control</text>
+          <text x="797" y="332" text-anchor="middle" class="msub">CH2</text>
+        </g>
+
+        <!-- 刹车 -->
+        <g class="mod" data-t="break_circuit" id="m_brk">
+          <rect x="182" y="470" width="70" height="52"/>
+          <text x="217" y="492" text-anchor="middle" class="mname">Break</text>
+          <text x="217" y="504" text-anchor="middle" class="mname">circuitry</text>
+        </g>
+
+        <!-- 连线 -->
+        <path class="sig clk" data-t="tim_ker_ck" d="M100,38 H420 V148"/>
+        <path class="sig trig v15only" data-t="tim_itr" d="M100,66 H530 V118 H556"/>
+        <path class="sig irq" data-t="tim_it" d="M178,122 H100"/>
+        <path class="sig clk" data-t="tim_pclk" d="M100,168 H128"/>
+        <path class="sig bus" data-t="tim_pclk" d="M144,122 H178"/>
+        <path class="sig bus" data-t="tim_pclk" d="M144,176 H178" stroke-dasharray="2 2"/>
+
+        <path class="sig in" data-t="tim_ti1_in" d="M100,232 H240"/>
+        <path class="sig in v15only" data-t="tim_ti2_in" d="M100,312 H284"/>
+        <path class="sig in v15only" data-t="tim_ti2_in" d="M252,312 V248"/>
+        <path class="sig in" data-t="tim_ti1_in" d="M270,233 H284"/>
+
+        <path class="sig evt" data-t="tim_ic1" d="M372,225 H392"/>
+        <path class="sig evt" data-t="tim_ic1" d="M452,223 H574"/>
+        <path class="sig evt v15only" data-t="tim_ic2" d="M372,316 H392"/>
+        <path class="sig evt v15only" data-t="tim_ic2" d="M452,316 H560 V303 H574"/>
+
+        <path class="sig trig" data-t="tim_ti1fp1" d="M372,203 V142 H520 V118 H556"/>
+        <path class="sig trig" data-t="tim_ti1f_ed" d="M372,196 V160 H544 V100 H556"/>
+        <path class="sig trig v15only" data-t="tim_ti2fp2" d="M372,340 V352 H532 V130 H556"/>
+
+        <path class="sig trig" data-t="tim_trc" d="M605,72 V70"/>
+        <path class="sig trig" data-t="slave_controller" d="M605,136 V144 H420 V148"/>
+        <path class="sig trig" data-t="slave_controller" d="M500,144 V148"/>
+        <path class="sig clk" data-t="tim_psc_ck" d="M420,38 V148"/>
+        <path class="sig clk" data-t="tim_cnt_ck" d="M452,170 H478"/>
+        <path class="sig evt" data-t="CNT" d="M546,170 H560 V215 H574"/>
+        <path class="sig evt v15only" data-t="CNT" d="M546,182 H560 V303 H574"/>
+        <path class="sig evt" data-t="CC1IF" d="M630,194 V150 H656 V44 H652"/>
+        <path class="sig evt" data-t="UEV" d="M598,110 H636"/>
+        <path class="sig evt" data-t="UEV" d="M520,126 V140 H700 V136"/>
+        <path class="sig trig v15only" data-t="tim_trgo" d="M654,44 H868"/>
+
+        <path class="sig out" data-t="tim_oc1ref" d="M686,222 H700"/>
+        <path class="sig out" data-t="tim_oc1" d="M742,220 H766"/>
+        <path class="sig out" data-t="tim_oc1" d="M828,210 H868"/>
+        <path class="sig out" data-t="tim_oc1n" d="M828,236 H868"/>
+        <path class="sig out v15only" data-t="tim_oc2" d="M686,303 H766"/>
+        <path class="sig out v15only" data-t="tim_oc2" d="M828,310 H868"/>
+        <path class="sig evt" data-t="dtg" d="M737,182 V200" stroke-dasharray="3 2"/>
+
+        <path class="sig evt" data-t="tim_brk" d="M252,496 H800 V346"/>
+        <path class="sig evt" data-t="tim_brk" d="M252,496 H780 V252"/>
+        <path class="sig in" data-t="tim_ocref_clr" d="M100,462 H744 V346 H766"/>
+        <path class="sig in" data-t="tim_bkin" d="M100,486 H182"/>
+        <path class="sig in" data-t="tim_sys_brk" d="M100,502 H182"/>
+        <path class="sig in" data-t="tim_brk_cmp" d="M100,518 H182"/>
+
+        <path class="sig dma" data-t="tim_cc1_dma" d="M178,360 H100"/>
+        <path class="sig dma" data-t="tim_upd_dma" d="M178,372 H100"/>
+        <path class="sig dma v15only" data-t="tim_trg_dma" d="M178,384 H100"/>
+        <path class="sig dma v15only" data-t="tim_com_dma" d="M178,396 H100"/>
+
+        <!-- 连线标注 -->
+        <text class="lab" x="430" y="34">tim_ker_ck</text>
+        <text class="lab" x="300" y="62">tim_itr 触发选择</text>
+        <text class="lab" x="140" y="118">tim_it</text>
+        <text class="lab" x="148" y="164">tim_pclk</text>
+        <text class="lab" x="430" y="143">tim_psc_ck</text>
+        <text class="lab" x="455" y="165">tim_cnt_ck</text>
+        <text class="lab" x="565" y="209">CC1</text>
+        <text class="lab" x="562" y="297">CC2</text>
+        <text class="lab" x="474" y="210">tim_ic1</text>
+        <text class="lab" x="474" y="311">tim_ic2</text>
+        <text class="lab" x="404" y="156">tim_ti1fp1</text>
+        <text class="lab" x="470" y="155">tim_ti1f_ed</text>
+        <text class="lab" x="615" y="67">tim_trc</text>
+        <text class="lab" x="470" y="139">Reset / enable / up-count</text>
+        <text class="lab" x="602" y="147">CC1I</text>
+        <text class="lab" x="548" y="136">UEV</text>
+        <text class="lab" x="700" y="38">tim_trgo</text>
+        <text class="lab" x="690" y="190">tim_oc1ref</text>
+        <text class="lab" x="838" y="205">tim_oc1</text>
+        <text class="lab" x="838" y="249">tim_oc1n</text>
+        <text class="lab" x="694" y="299">tim_oc2ref</text>
+        <text class="lab" x="838" y="324">tim_oc2</text>
+        <text class="lab" x="560" y="490">tim_brk</text>
+        <text class="lab" x="560" y="458">tim_ocref_clr_int</text>
+      </svg>
+    </div>
+    <div class="dgm-legend">
+      <span><i style="background:#38d0e0"></i>时钟</span>
+      <span><i style="background:#fbbf24"></i>外部输入</span>
+      <span><i style="background:#ff9f45"></i>输出</span>
+      <span><i style="background:#f472b6"></i>触发 / 从模式</span>
+      <span><i style="background:#4ade80"></i>事件</span>
+      <span><i style="background:#a78bfa"></i>中断</span>
+      <span><i style="background:#f87171"></i>DMA</span>
+      <span><i style="background:#7dd3fc"></i>总线</span>
+    </div>
+    <div class="dgm-foot">
+      说明：本图为 Figure 675 的拓扑重绘，用于讲解不追求几何一致；<b>tim_itr[15:0]</b> 是内部触发输入（仅 TIM15），与全局中断 <b>tim_it</b> 不是一回事。
+    </div>
+  </section>
+
+  <aside class="console">
+    <div class="con-head">
+      <b>功能场景</b>
+      <span class="mini" id="sceneGroup"></span>
+      <div class="devsw">
+        <button class="btn dev on" data-dev="TIM15">TIM15</button>
+        <button class="btn dev" data-dev="TIM16">TIM16</button>
+        <button class="btn dev" data-dev="TIM17">TIM17</button>
+      </div>
+    </div>
+    <div class="scene-list" id="sceneList"></div>
+    <div class="stepcard">
+      <div class="step-top"><span id="stepNo">1 / 5</span><span class="sname" id="sceneName"></span></div>
+      <h3 id="stepTitle">—</h3>
+      <p id="stepDesc">—</p>
+      <div class="stepctl">
+        <button class="btn" id="btnPrev">上一步</button>
+        <button class="btn" id="btnPlay">播放</button>
+        <button class="btn" id="btnNext">下一步</button>
+        <button class="btn" id="btnReset">复位</button>
+        <label>速度<input type="range" id="speed" min="1" max="8" value="2"></label>
+        <button class="btn" id="btnTrig">注入 TRGI 脉冲</button>
+      </div>
+      <div class="hint" id="stepNote"></div>
+    </div>
+    <div class="waves">
+      <canvas id="wave"></canvas>
+      <div class="wlegend" id="waveLegend"></div>
+    </div>
+    <div class="statrow" id="statRow"></div>
+  </aside>
+</div>
+
+<div class="drawer open" id="drawer">
+  <div class="drawer-tabs">
+    <button class="dtab on" data-tab="gloss">术语表 · 信号与缩写</button>
+    <button class="dtab" data-tab="deliver">信号出货清单</button>
+    <button class="dtab" data-tab="regs">寄存器位域</button>
+    <button class="dtab" data-tab="code">参考代码</button>
+    <span class="grow"></span>
+    <span class="src">RM0456 Rev 5 §56.4 · 中文版页码</span>
+    <button class="btn" id="drawerToggle">收起</button>
+  </div>
+  <div class="drawer-panes">
+    <div class="pane on" id="pane-gloss">
+      <div class="gbar">
+        <input id="gq" placeholder="搜索：缩写 / 全称 / 中文 / 用途…">
+        <div class="gfilters" id="gFilters"></div>
+        <span class="gcount" id="gCount"></span>
+      </div>
+      <div class="gwrap" id="gWrap"><table class="gt"><thead><tr>
+        <th style="width:120px">缩写 / 符号</th><th style="width:190px">全称</th><th style="width:120px">中文</th>
+        <th style="width:74px">类型</th><th style="width:150px">来自</th><th style="width:150px">去往</th><th>使用场景</th>
+      </tr></thead><tbody id="gBody"></tbody></table></div>
+    </div>
+    <div class="pane" id="pane-deliver">
+      <div class="gbar"><span class="mini">定时器内部信号 → 片内目的地</span><span class="gcount">点击行可在框图上高亮</span></div>
+      <div class="gwrap" id="deliverWrap"></div>
+    </div>
+    <div class="pane" id="pane-regs">
+      <div class="gbar"><span class="mini">位域按真实 bit 绘制，橙色 = 当前场景相关；点击任一位域看全称</span><span class="gcount" id="regNote"></span></div>
+      <div class="regwrap" id="regWrap"></div>
+    </div>
+    <div class="pane" id="pane-code">
+      <div class="gbar"><span class="mini">STM32U5 HAL 示例，仅示意配置顺序，默认折叠</span></div>
+      <div class="codewrap" id="codeWrap"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+/* ============================================================
+   0. 元数据
+   ============================================================ */
+const TYPES = {
+  clk:['时钟','#38d0e0'], in:['输入','#fbbf24'], out:['输出','#ff9f45'],
+  trig:['触发','#f472b6'], evt:['事件','#4ade80'], irq:['中断','#a78bfa'],
+  dma:['DMA','#f87171'], bus:['总线','#7dd3fc'], reg:['寄存器','#b9c9d7'],
+  bit:['位域','#b9c9d7'], concept:['概念','#2dd4bf']
+};
+
+/* ----------------------------------------------
+   术语 / 信号全表：
+   id, 缩写, 全称, 中文, 类型, 来自, 去往, 使用场景, 依据, 仅TIM15
+   ---------------------------------------------- */
+const TERMS = [
+{id:'tim_ker_ck',a:'tim_ker_ck',en:'Timer kernel clock',zh:'定时器内核时钟',t:'clk',from:'RCC 的 TIMxCLK 选择器（PCLK 或其它内核时钟）',to:'PSC、数字滤波器采样时钟、死区/采样逻辑',u:'定时器真正的计数节拍源；必须与 tim_pclk 同源且分频比为 1–16 的整数，否则寄存器写入与计数节拍不同步。',n:'RM0456 p.2344'},
+{id:'tim_pclk',a:'tim_pclk',en:'Timer APB peripheral clock',zh:'APB 外设时钟',t:'clk',from:'APB1 总线时钟（RCC）',to:'寄存器接口、IRQ interface、DMA interface',u:'CPU 读写 TIMx 寄存器的总线时钟域；与计数时钟分开，便于低功耗时停掉内核时钟仍保留寄存器状态。',n:'RM0456 p.2344'},
+{id:'tim_psc_ck',a:'tim_psc_ck',en:'Prescaler clock',zh:'预分频器输入时钟',t:'clk',from:'tim_ker_ck',to:'PSC 预分频器',u:'PSC 的输入；PSC=0 时等于内核时钟，PSC=n 时为 n+1 分频。',n:'RM0456 p.2344'},
+{id:'tim_cnt_ck',a:'tim_cnt_ck',en:'Counter clock',zh:'计数器时钟',t:'clk',from:'PSC 预分频器',to:'CNT 计数器',u:'CNT 每来一个 tim_cnt_ck 就 +1；它是所有捕获/比较/更新事件的时间基准。',n:'RM0456 p.2344'},
+{id:'tim_itr',a:'tim_itr[15:0]',en:'Internal trigger inputs',zh:'内部触发输入',t:'trig',from:'其它定时器的 TRGO / OC1（ITR0–5、7、8 等）',to:'从模式控制器的 TS 多路选择器',u:'定时器级联：把别的定时器当自己的触发源，实现同步启动、复位、门控、外部时钟。仅 TIM15 有。',n:'表 571 / 574，p.2344–2345',d:'15'},
+{id:'tim_ti1_in',a:'tim_ti1_in[15:0]',en:'TI1 input',zh:'通道 1 外部输入',t:'in',from:'GPIO 复用（TIMx_CH1）或内部复用',to:'TI1 输入滤波器 + 边沿检测器',u:'输入捕获测频率/占空比、外部时钟、门控、编码器（本系列无编码器接口）等。',n:'RM0456 p.2344'},
+{id:'tim_ti2_in',a:'tim_ti2_in[15:0]',en:'TI2 input',zh:'通道 2 外部输入',t:'in',from:'GPIO 复用（TIMx_CH2）',to:'TI2 输入滤波器 + 边沿检测器',u:'第二路捕获、双沿测量、与 TI1 做 XOR 组合。仅 TIM15 有。',n:'RM0456 p.2344',d:'15'},
+{id:'tim_ti1f_ed',a:'tim_ti1f_ed',en:'TI1 edge detector output',zh:'TI1 边沿检测输出',t:'evt',from:'TI1 边沿检测器',to:'从模式控制器 / 触发选择',u:'把 TI1 的每个有效边沿直接当触发事件，常见于双边沿计数与外部时钟。',n:'RM0456 p.2344'},
+{id:'tim_ti1fp1',a:'tim_ti1fp1',en:'TI1 filtered and prescaled',zh:'滤波并预分频后的 TI1',t:'evt',from:'TI1 滤波器 + IC1 预分频',to:'从模式控制器（TS=00101）',u:'作为 TRGI 的候选源，让外部信号直接控制从模式。',n:'RM0456 p.2345'},
+{id:'tim_ti2fp2',a:'tim_ti2fp2',en:'TI2 filtered and prescaled',zh:'滤波并预分频后的 TI2',t:'evt',from:'TI2 滤波器 + IC2 预分频',to:'从模式控制器（TS=00110）',u:'第二路外部触发源；仅 TIM15。',n:'RM0456 p.2345',d:'15'},
+{id:'tim_trgi',a:'tim_trgi',en:'Trigger input',zh:'触发输入',t:'trig',from:'TS 多路选择器（ITR / TI1FP1 / TI2FP2 / TI1F_ED）',to:'从模式控制器',u:'从模式的所有动作（复位、门控、启动、外部时钟）都由 tim_trgi 驱动。',n:'RM0456 p.2391'},
+{id:'tim_trc',a:'tim_trc',en:'Trigger controller output',zh:'触发控制器输出',t:'trig',from:'Trigger controller',to:'从模式控制器 / 计数控制',u:'内部触发总线，负责把选中的触发事件分发给从模式与计数逻辑。',n:'RM0456 p.2342'},
+{id:'tim_trgo',a:'tim_trgo',en:'Trigger output',zh:'触发输出',t:'trig',from:'主模式控制器（MMS）',to:'其它定时器 ITR、ADC 触发、GPDMA 请求、EXTI',u:'主模式核心：把本定时器的复位/使能/更新/比较事件广播出去，实现级联与同步采样。仅 TIM15。',n:'RM0456 p.2390',d:'15'},
+{id:'tim_ic1',a:'tim_ic1',en:'Input capture 1 signal',zh:'输入捕获 1 信号',t:'evt',from:'TI1 滤波器 → IC1 预分频',to:'Capture/Compare 1 寄存器（锁存 CNT）',u:'边沿到来时把当前 CNT 复制进 CCR1，用于测周期、脉宽、频率。',n:'RM0456 p.2355'},
+{id:'tim_ic2',a:'tim_ic2',en:'Input capture 2 signal',zh:'输入捕获 2 信号',t:'evt',from:'TI2 滤波器 → IC2 预分频',to:'Capture/Compare 2 寄存器',u:'第二路捕获；仅 TIM15。',n:'RM0456 p.2355',d:'15'},
+{id:'tim_oc1ref',a:'tim_oc1ref',en:'Output compare 1 reference',zh:'输出比较 1 参考信号',t:'evt',from:'CNT 与 CCR1 比较器',to:'DTG 死区生成器 / 输出控制',u:'PWM 的“理想波形”，尚未加死区和极性；主模式 MMS=100 时可直接送到 TRGO。',n:'RM0456 p.2357'},
+{id:'tim_oc2ref',a:'tim_oc2ref',en:'Output compare 2 reference',zh:'输出比较 2 参考信号',t:'evt',from:'CNT 与 CCR2 比较器',to:'输出控制 CH2',u:'第二路 PWM 参考；CH2 没有互补输出与死区。仅 TIM15。',n:'RM0456 p.2357',d:'15'},
+{id:'tim_oc1',a:'tim_oc1',en:'Output compare 1 output',zh:'通道 1 输出',t:'out',from:'输出控制（极性/使能）',to:'GPIO 复用引脚 TIMx_CH1',u:'PWM、单脉冲、比较翻转等最终引脚波形。',n:'RM0456 p.2357'},
+{id:'tim_oc1n',a:'tim_oc1n',en:'Complementary output 1',zh:'通道 1 互补输出',t:'out',from:'DTG 死区生成器 → 输出控制',to:'GPIO 复用引脚 TIMx_CH1N',u:'半桥/全桥下管驱动；与 tim_oc1 之间插入死区，防止直通。',n:'RM0456 p.2407'},
+{id:'tim_oc2',a:'tim_oc2',en:'Output compare 2 output',zh:'通道 2 输出',t:'out',from:'输出控制 CH2',to:'GPIO 复用引脚 TIMx_CH2',u:'第二路 PWM/比较输出；TIM15 专有，且没有 OC2N。',n:'RM0456 p.2344',d:'15'},
+{id:'tim_cc1',a:'tim_cc1',en:'Capture/compare channel 1 signal',zh:'捕获/比较通道 1 内部信号',t:'evt',from:'通道 1（输入或输出方向）',to:'CCR1 / 比较器 / 触发控制器',u:'输入模式下是捕获通路，输出模式下是比较通路；由 CCMR1.CC1S 决定方向。',n:'RM0456 p.2355'},
+{id:'tim_cc2',a:'tim_cc2',en:'Capture/compare channel 2 signal',zh:'捕获/比较通道 2 内部信号',t:'evt',from:'通道 2',to:'CCR2 / 比较器',u:'第二通道内部信号；仅 TIM15。',n:'RM0456 p.2355',d:'15'},
+{id:'tim_bkin',a:'tim_bkin',en:'Break input',zh:'刹车输入',t:'in',from:'GPIO 复用（TIMx_BKIN）或内部比较器',to:'Break circuitry',u:'功率级过流/过压时立刻封锁 PWM；极性由 BDTR.BKP 选择，滤波由 BKF 设置。',n:'RM0456 p.2371'},
+{id:'tim_sys_brk',a:'tim_sys_brk',en:'System break input',zh:'系统刹车输入',t:'in',from:'LOCKUP、PVD、SRAM/Flash 双 ECC、CSS',to:'Break circuitry',u:'芯片级故障也能直接关断 PWM，适合安全相关应用。',n:'RM0456 p.2346'},
+{id:'tim_brk_cmp',a:'tim_brk_cmp[8:1]',en:'Break input from comparator',zh:'比较器刹车输入',t:'in',from:'COMP1_OUT（cmp1）、COMP2_OUT（cmp2），8:3 保留',to:'Break circuitry',u:'模拟比较器检测到过流阈值后，无需 CPU 介入即可封锁输出。',n:'RM0456 p.2346'},
+{id:'tim_brk',a:'tim_brk',en:'Break event',zh:'刹车事件',t:'evt',from:'Break circuitry',to:'输出控制（清 MOE）、状态机、BIF 标志',u:'刹车事件把 BDTR.MOE 清零，OC/OCN 进入空闲或运行电平（由 OSSI/OSSR 决定）。',n:'RM0456 p.2371'},
+{id:'tim_ocref_clr',a:'tim_ocref_clr[7:0]',en:'OCREF clear input',zh:'OCREF 清除输入',t:'in',from:'比较器输出等（由 AF2.OCRSEL 选择）',to:'输出控制',u:'逐周期限流：一旦比较器翻转，立即把当前 PWM 周期剩余部分拉低，不等下一个周期。',n:'RM0456 p.2376'},
+{id:'tim_ocref_clr_int',a:'tim_ocref_clr_int',en:'Internal OCREF clear',zh:'内部 OCREF 清除',t:'evt',from:'OCREF clear 选择/滤波',to:'输出控制',u:'tim_ocref_clr 经过选择与滤波后的内部版本。',n:'RM0456 p.2376'},
+{id:'UEV',a:'UEV',en:'Update event',zh:'更新事件',t:'evt',from:'计数器溢出/下溢、EGR.UG、从模式复位',to:'影子寄存器更新、重复计数器、UIF、TRGO(MMS=010)、DMA',u:'“提交时刻”：PSC/ARR/CCR 的预装载值在 UEV 搬运到影子寄存器，保证波形不撕裂。',n:'RM0456 p.2352'},
+{id:'UIF',a:'UIF',en:'Update interrupt flag',zh:'更新中断标志',t:'irq',from:'SR 寄存器 bit0',to:'IRQ interface → NVIC（UIE=1 时）',u:'每个更新事件置 1；写 0 清除。中断服务里常用来做周期任务。',n:'RM0456 p.2394'},
+{id:'CC1IF',a:'CC1IF',en:'Capture/compare 1 interrupt flag',zh:'捕获/比较 1 中断标志',t:'irq',from:'SR bit1',to:'NVIC / DMA（CC1IE / CC1DE）',u:'捕获到值时置位；输出模式下比较匹配时置位。',n:'RM0456 p.2394'},
+{id:'CC2IF',a:'CC2IF',en:'Capture/compare 2 interrupt flag',zh:'捕获/比较 2 中断标志',t:'irq',from:'SR bit2',to:'NVIC / DMA',u:'第二通道事件标志；仅 TIM15。',n:'RM0456 p.2394',d:'15'},
+{id:'BIF',a:'BIF',en:'Break interrupt flag',zh:'刹车中断标志',t:'irq',from:'SR bit7',to:'NVIC（BIE=1）',u:'刹车事件发生即置位，用于故障记录与恢复判断。',n:'RM0456 p.2394'},
+{id:'SBIF',a:'SBIF',en:'System break interrupt flag',zh:'系统刹车中断标志',t:'irq',from:'Break circuitry（图中画出）',to:'中断逻辑',u:'图 675 中出现的系统刹车标志；注意 TIM15_SR 的 bit15:11 为保留，未定义该位，实际以 BIF 反映刹车。',n:'RM0456 p.2394',d:'15'},
+{id:'CC1OF',a:'CC1OF',en:'Capture/compare 1 over-capture flag',zh:'捕获 1 溢出标志',t:'bit',from:'SR bit9',to:'软件读取',u:'上一次捕获值还没被读走又发生新捕获时置位，提示数据丢失。',n:'RM0456 p.2394'},
+{id:'tim_it',a:'tim_it',en:'Timer interrupt request',zh:'全局中断请求',t:'irq',from:'IRQ interface（UIF/CC1IF/CC2IF/BIF 等汇总）',to:'NVIC 的 TIMx 中断线',u:'所有使能的中断源在 IRQ interface 里 OR 成一根 tim_it，进 NVIC 后由软件分辨标志。',n:'RM0456 p.2344'},
+{id:'tim_cc1_dma',a:'tim_cc1_dma',en:'CC1 DMA request',zh:'捕获/比较 1 DMA 请求',t:'dma',from:'DMA interface（CC1DE）',to:'DMAMUX → GPDMA/LPDMA 通道',u:'捕获值自动搬进内存，适合高速测频不占 CPU。',n:'RM0456 p.2386'},
+{id:'tim_upd_dma',a:'tim_upd_dma',en:'Update DMA request',zh:'更新 DMA 请求',t:'dma',from:'DMA interface（UDE）',to:'DMAMUX → GPDMA/LPDMA',u:'周期性触发 DMA，搬运缓冲区或刷新 CCR（DMA burst）。',n:'RM0456 p.2386'},
+{id:'tim_trg_dma',a:'tim_trg_dma',en:'Trigger DMA request',zh:'触发 DMA 请求',t:'dma',from:'DMA interface',to:'DMAMUX',u:'由触发事件发起 DMA；仅 TIM15。',n:'RM0456 表 580',d:'15'},
+{id:'tim_com_dma',a:'tim_com_dma',en:'Commutation DMA request',zh:'换相 DMA 请求',t:'dma',from:'DMA interface',to:'DMAMUX',u:'电机换相事件触发 DMA 更新 CCR；仅 TIM15。',n:'RM0456 表 580',d:'15'},
+{id:'PSC',a:'PSC',en:'Prescaler register',zh:'预分频寄存器',t:'reg',from:'APB 总线写入',to:'PSC 影子寄存器',u:'16 位，分频比 = PSC+1；有预装载，写入后在下一个 UEV 生效。',n:'偏移 0x28'},
+{id:'CNT',a:'CNT',en:'Counter register',zh:'计数器寄存器',t:'reg',from:'tim_cnt_ck',to:'比较器、捕获逻辑',u:'16 位；TIM15/16/17 只有向上计数（图中 ± 为系列通用画法）。',n:'偏移 0x24'},
+{id:'ARR',a:'ARR',en:'Auto-reload register',zh:'自动重装寄存器',t:'reg',from:'APB 总线',to:'影子寄存器 / 比较器',u:'决定计数周期；ARPE=1 时写入先进预装载，UEV 时生效。ARR=9 表示 0–9 共 10 个计数。',n:'偏移 0x2C'},
+{id:'RCR',a:'RCR / REP',en:'Repetition counter register',zh:'重复计数器寄存器',t:'reg',from:'APB 总线',to:'重复计数器',u:'8 位。RCR=n 时每 n+1 个计数周期才产生一次 UEV，用于降低中断频率或生成 N 周期 PWM。',n:'偏移 0x30'},
+{id:'CCR1',a:'CCR1',en:'Capture/compare register 1',zh:'捕获/比较寄存器 1',t:'reg',from:'捕获锁存 或 APB 总线',to:'比较器 / 输出控制',u:'输入模式下存放捕获到的 CNT；输出模式下决定占空比或翻转时刻。有预装载（OC1PE）。',n:'偏移 0x34'},
+{id:'CCR2',a:'CCR2',en:'Capture/compare register 2',zh:'捕获/比较寄存器 2',t:'reg',from:'捕获锁存 或 APB 总线',to:'比较器 / 输出控制',u:'第二通道；仅 TIM15。',n:'偏移 0x38',d:'15'},
+{id:'CR1',a:'CR1',en:'Control register 1',zh:'控制寄存器 1',t:'reg',from:'APB 总线',to:'计数器/时钟逻辑',u:'CEN、OPM、ARPE、CKD、UDIS、URS、UIFREMAP 等总开关。',n:'偏移 0x00'},
+{id:'CR2',a:'CR2',en:'Control register 2',zh:'控制寄存器 2',t:'reg',from:'APB 总线',to:'主模式/输出逻辑',u:'MMS[2:0]、CCPC、CCUS、CCDS、TI1S、OIS1/OIS1N/OIS2。',n:'偏移 0x04'},
+{id:'SMCR',a:'SMCR',en:'Slave mode control register',zh:'从模式控制寄存器',t:'reg',from:'APB 总线',to:'从模式控制器',u:'SMS[3:0] 选从模式，TS[4:0] 选触发源，MSM 主从同步，SMSPE/SMSP 对 SMS 预装载。TIM16/17 无此寄存器。',n:'偏移 0x08',d:'15'},
+{id:'CCMR1',a:'CCMR1',en:'Capture/compare mode register 1',zh:'捕获/比较模式寄存器 1',t:'reg',from:'APB 总线',to:'通道 1/2 输入输出逻辑',u:'CC1S/CC2S 选方向，IC1F/IC2F 滤波，IC1PSC 预分频，OC1M 输出模式，OC1PE 预装载使能。',n:'偏移 0x18'},
+{id:'CCER',a:'CCER',en:'Capture/compare enable register',zh:'捕获/比较使能寄存器',t:'reg',from:'APB 总线',to:'通道输出/捕获使能',u:'CC1E/CC1NE/CC2E 使能输出，CC1P/CC1NP 选极性。',n:'偏移 0x20'},
+{id:'BDTR',a:'BDTR',en:'Break and dead-time register',zh:'刹车与死区寄存器',t:'reg',from:'APB 总线',to:'DTG / 输出控制 / 刹车逻辑',u:'MOE 主输出使能、AOE 自动恢复、BKE/BKP 刹车使能与极性、BKF 滤波、DTG[7:0] 死区、LOCK 配置锁。',n:'偏移 0x44'},
+{id:'DIER',a:'DIER',en:'DMA/interrupt enable register',zh:'DMA/中断使能寄存器',t:'reg',from:'APB 总线',to:'IRQ / DMA interface',u:'UIE、CC1IE、CC2IE、BIE 以及对应的 UDE/CC1DE/CC2DE/BDE。',n:'偏移 0x0C'},
+{id:'SR',a:'SR',en:'Status register',zh:'状态寄存器',t:'reg',from:'事件逻辑',to:'IRQ interface / 软件',u:'UIF、CC1IF、CC2IF、BIF、CC1OF 等标志，写 0 清除（或读后写 0）。',n:'偏移 0x10'},
+{id:'EGR',a:'EGR',en:'Event generation register',zh:'事件产生寄存器',t:'reg',from:'软件写入',to:'更新/捕获/刹车逻辑',u:'UG 软件产生 UEV，CC1G 软件触发捕获，BG 软件触发刹车。',n:'偏移 0x14'},
+{id:'DCR',a:'DCR',en:'DMA control register',zh:'DMA 控制寄存器',t:'reg',from:'APB 总线',to:'DMA burst 逻辑',u:'DBA 基地址、DBL 长度、DBSS 选择 burst 源，实现一次 DMA 更新多个寄存器。',n:'偏移 0x3DC'},
+{id:'DMAR',a:'DMAR',en:'DMA address for full transfer',zh:'DMA 全传输地址寄存器',t:'reg',from:'APB 总线 / DMA',to:'DMA burst 目标',u:'DMA burst 时指向被读写的寄存器组。',n:'偏移 0x3E0'},
+{id:'TISEL',a:'TISEL',en:'TIMx input selection register',zh:'输入选择寄存器',t:'reg',from:'APB 总线',to:'TI1/TI2 输入多路选择',u:'选择 TI1/TI2 来自哪个引脚或内部源。',n:'偏移 0x5C'},
+{id:'AF1AF2',a:'AF1 / AF2',en:'Alternate function registers 1/2',zh:'复用功能寄存器 1/2',t:'reg',from:'APB 总线',to:'刹车极性、OCREF 清除源等',u:'AF1 配置 BKIN/BKINP 等，AF2 配置 OCRSEL（OCREF clear 源）等。',n:'偏移 0x60 / 0x64'},
+{id:'SMS',a:'SMS',en:'Slave mode selection',zh:'从模式选择',t:'bit',from:'SMCR[3:0]',to:'从模式控制器',u:'0000 关，0100 复位，0101 门控，0110 触发，0111 外部时钟 1，1000 复位+触发，1001 门控+复位。',n:'RM0456 p.2391',d:'15'},
+{id:'TS',a:'TS',en:'Trigger selection',zh:'触发源选择',t:'bit',from:'SMCR[6:4] / [20:16]',to:'TRGI 多路选择器',u:'选择 ITR0–10、ITR12–15、TI1F_ED、TI1FP1、TI2FP2 作为 tim_trgi。',n:'RM0456 p.2391',d:'15'},
+{id:'MMS',a:'MMS',en:'Master mode selection',zh:'主模式选择',t:'bit',from:'CR2[6:4]',to:'TRGO 多路选择器',u:'000 复位(UG)、001 使能(CEN)、010 更新(UEV)、011 比较脉冲(CC1IF)、100 OC1REF、101 OC2REF。',n:'RM0456 p.2390',d:'15'},
+{id:'MSM',a:'MSM',en:'Master/slave mode',zh:'主从同步模式',t:'bit',from:'SMCR[7]',to:'从模式控制器',u:'置 1 时，触发输入与本地启动被同步，避免从定时器提前一个周期启动。',n:'RM0456 p.2391',d:'15'},
+{id:'SMSPE',a:'SMSPE / SMSP',en:'SMS preload enable / SMS preload',zh:'从模式选择预装载',t:'bit',from:'SMCR[24]/[25]',to:'SMS 影子逻辑',u:'让 SMS 的修改在下一个更新事件生效，避免运行中改模式造成毛刺。',n:'RM0456 p.2391',d:'15'},
+{id:'OPM',a:'OPM',en:'One-pulse mode',zh:'单脉冲模式',t:'bit',from:'CR1[3]',to:'计数控制',u:'置 1 后计数器在下一次 UEV 自动清 CEN，只输出一个脉冲/PWM 周期。',n:'RM0456 p.2379'},
+{id:'ARPE',a:'ARPE',en:'Auto-reload preload enable',zh:'自动重装预装载使能',t:'bit',from:'CR1[7]',to:'ARR 影子寄存器',u:'1 = 写入 ARR 先进预装载，UEV 时生效；0 = 立即生效。',n:'RM0456 p.2389'},
+{id:'OCPE',a:'OCxPE',en:'Output compare x preload enable',zh:'输出比较预装载使能',t:'bit',from:'CCMR1[3] / [11]',to:'CCRx 影子寄存器',u:'1 = CCR 写入在 UEV 生效，保证 PWM 占空比切换不撕裂。',n:'RM0456 p.2398'},
+{id:'MOE',a:'MOE',en:'Main output enable',zh:'主输出使能',t:'bit',from:'BDTR[15]',to:'输出控制',u:'所有 OC/OCN 的总闸；刹车事件会硬件清零，AOE=1 时在下一个 UEV 恢复。',n:'RM0456 p.2407'},
+{id:'OSSI',a:'OSSI / OSSR',en:'Off-state selection for idle/run',zh:'空闲/运行态关闭电平选择',t:'bit',from:'BDTR[10]/[11]',to:'输出控制',u:'决定 MOE=0（空闲）或通道关闭（运行）时，OC/OCN 输出高阻还是无效电平。',n:'RM0456 p.2407'},
+{id:'DTG',a:'DTG[7:0]',en:'Dead-time generator',zh:'死区时间发生器',t:'bit',from:'BDTR[7:0]',to:'互补输出通路',u:'把 OC1 的上升沿延后 t_DTG；分段编码覆盖约 1–(127×t_DTS) 到 (508+…)×t_DTS 的范围。',n:'RM0456 p.2408'},
+{id:'LOCK',a:'LOCK[1:0]',en:'Configuration lock',zh:'配置锁定',t:'bit',from:'BDTR[9:8]',to:'BDTR/CCER 写保护',u:'防止软件误改刹车与输出配置；锁定后直到复位才能解锁。',n:'RM0456 p.2407'},
+{id:'BKE',a:'BKE / BKP / AOE',en:'Break enable / polarity / auto output enable',zh:'刹车使能/极性/自动恢复',t:'bit',from:'BDTR[12]/[13]/[14]',to:'刹车电路',u:'BKE 打开刹车输入，BKP 选有效电平，AOE 决定刹车解除后是否自动恢复 MOE。',n:'RM0456 p.2407'},
+{id:'TI1S',a:'TI1S',en:'TI1 selection',zh:'TI1 输入选择',t:'bit',from:'CR2[7]',to:'XOR 组合逻辑',u:'置 1 时 TI1 = TI1 XOR TI2，用于正交/双信号合成一路计数。',n:'RM0456 p.2390'},
+{id:'IC1F',a:'IC1F / IC1PSC',en:'Input capture 1 filter / prescaler',zh:'捕获 1 滤波/预分频',t:'bit',from:'CCMR1[7:4] / [3:2]',to:'TI1 滤波器',u:'IC1F 选采样点数和采样频率；IC1PSC 每 2/4/8 个边沿才捕获一次。',n:'RM0456 p.2398'},
+{id:'OC1M',a:'OC1M',en:'Output compare 1 mode',zh:'输出比较 1 模式',t:'bit',from:'CCMR1[6:4]',to:'输出比较逻辑',u:'110 = PWM 模式 1（CNT<CCR1 有效），111 = PWM 模式 2；其他为冻结/匹配置位/翻转等。',n:'RM0456 p.2398'},
+{id:'CEN',a:'CEN',en:'Counter enable',zh:'计数器使能',t:'bit',from:'CR1[0]',to:'计数控制',u:'置 1 开始计数；单脉冲模式下由硬件自动清零，也可被从模式触发置位。',n:'RM0456 p.2389'},
+{id:'UG',a:'UG',en:'Update generation',zh:'软件产生更新事件',t:'bit',from:'EGR[0]',to:'UEV 逻辑',u:'写 1 立即产生一次 UEV，常用于初始化时把预装载值搬进影子寄存器。',n:'RM0456 p.2395'},
+{id:'CKD',a:'CKD',en:'Clock division',zh:'时钟分频',t:'bit',from:'CR1[9:8]',to:'数字滤波器 / 死区时基',u:'给滤波器和死区提供 t_DTS = t_CK_INT × 1/2/4；不影响计数器节拍。',n:'RM0456 p.2389'},
+{id:'ITR',a:'ITR0–15',en:'Internal trigger lines',zh:'内部触发线',t:'concept',from:'TIM1/2/3/4/5/8 的 TRGO、TIM16/17 的 OC1',to:'TS 多路选择器',u:'TIM15 可用 ITR0–5、7、8；ITR6 等在本芯片未连接。',n:'RM0456 表 574',d:'15'},
+{id:'shadow',a:'影子寄存器 / 预装载',en:'Shadow register / preload',zh:'影子寄存器 / 预装载',t:'concept',from:'预装载寄存器',to:'真正参与比较/分频的寄存器',u:'写寄存器先落到预装载，UEV 时统一搬运，保证 PWM 周期边界更新、不产生窄脉冲。',n:'RM0456 p.2342 注'},
+{id:'deadtime',a:'死区',en:'Dead time',zh:'死区时间',t:'concept',from:'DTG 生成',to:'OC1 与 OC1N 之间',u:'保证互补两管不会同时导通；桥式驱动必须设置，大小取决于功率管开关时间。',n:'RM0456 p.2408'},
+{id:'opm',a:'单脉冲',en:'One-pulse mode',zh:'单脉冲模式',t:'concept',from:'OPM=1 + 启动条件',to:'一个周期后自动停止',u:'适合精确定时、超声激励、单次脉冲输出；启动可由 CEN 或从模式触发。',n:'RM0456 p.2379'},
+
+/* 模块类术语 */
+{id:'trigger_controller',a:'Trigger controller',en:'Trigger controller',zh:'触发控制器',t:'concept',from:'CC1I/CC2I、UEV、TRC',to:'从模式控制器 / TRGO',u:'把内部事件组织成触发信号；主模式下决定 TRGO 的内容。',n:'图 675'},
+{id:'slave_controller',a:'Slave mode controller',en:'Slave mode controller',zh:'从模式控制器',t:'concept',from:'tim_trgi / SMS / TS',to:'Reset、Enable、Up-count 控制',u:'让本定时器受外部或其它定时器支配：复位、门控、触发启动、外部时钟。TIM16/17 没有这个模块。',n:'图 675',d:'15'},
+{id:'irq_if',a:'IRQ interface',en:'Interrupt interface',zh:'中断接口',t:'concept',from:'SR 中各标志 + DIER 使能位',to:'tim_it → NVIC',u:'把多个中断源 OR 成一根全局中断线，降低 NVIC 资源占用。',n:'图 675'},
+{id:'dma_if',a:'DMA interface',en:'DMA interface',zh:'DMA 接口',t:'concept',from:'捕获/更新/触发/换相事件',to:'tim_cc1_dma 等 DMA 请求',u:'把事件变成 DMA 请求，交给 DMAMUX 分配到通道。',n:'图 675'},
+{id:'psc',a:'PSC prescaler',en:'Prescaler',zh:'预分频器',t:'concept',from:'tim_ker_ck',to:'tim_cnt_ck',u:'把内核时钟降到需要的计数频率，分频比 1–65536。',n:'图 675'},
+{id:'cnt',a:'CNT counter',en:'Counter',zh:'计数器',t:'concept',from:'tim_cnt_ck / 从模式控制',to:'比较器、捕获锁存、UEV',u:'16 位向上计数，0→ARR 循环；是定时器所有事件的“时间轴”。',n:'图 675'},
+{id:'arr',a:'Auto-reload register',en:'Auto-reload register',zh:'自动重装寄存器',t:'concept',from:'APB 总线',to:'比较器 / 影子寄存器',u:'定义周期；与 PSC 一起决定定时频率：f = f_CK/(PSC+1)/(ARR+1)。',n:'图 675'},
+{id:'rep',a:'Repetition counter',en:'Repetition counter',zh:'重复计数器',t:'concept',from:'RCR',to:'UEV 分频',u:'每 n+1 个计数周期才产生一次 UEV，用于 N 周期 PWM 或降低中断频率。',n:'图 675'},
+{id:'ti1f',a:'TI1 input filter & edge detector',en:'Input filter and edge detector',zh:'TI1 输入滤波与边沿检测',t:'concept',from:'tim_ti1_in',to:'tim_ic1 / tim_ti1fp1 / tim_ti1f_ed',u:'用采样投票滤除毛刺，并按 CC1P 选择有效边沿。',n:'图 675'},
+{id:'ti2f',a:'TI2 input filter & edge detector',en:'Input filter and edge detector',zh:'TI2 输入滤波与边沿检测',t:'concept',from:'tim_ti2_in',to:'tim_ic2 / tim_ti2fp2',u:'第二路输入处理；仅 TIM15。',n:'图 675',d:'15'},
+{id:'xor',a:'XOR',en:'XOR combiner',zh:'异或合成',t:'concept',from:'TI1 / TI2',to:'TI1 滤波器',u:'TI1S=1 时把两路输入异或，适合霍尔/正交信号合成。',n:'图 675'},
+{id:'ic1ps',a:'IC prescaler',en:'Input capture prescaler',zh:'捕获预分频器',t:'concept',from:'边沿检测输出',to:'捕获锁存',u:'每 1/2/4/8 个边沿捕获一次，降低捕获中断频率。',n:'图 675'},
+{id:'dtg_reg',a:'DTG registers',en:'Dead-time registers',zh:'死区寄存器',t:'concept',from:'BDTR',to:'DTG 模块',u:'存放死区时间编码，运行时可用 DTG 位域调整。',n:'图 675'},
+{id:'output_control',a:'Output control',en:'Output control',zh:'输出控制',t:'concept',from:'OCREF / DTG / 刹车 / OCREF clear',to:'tim_oc1 / tim_oc1n / tim_oc2',u:'做极性、使能、空闲电平与刹车封锁，是波形离开定时器的最后一道门。',n:'图 675'},
+{id:'break_circuit',a:'Break circuitry',en:'Break circuitry',zh:'刹车电路',t:'concept',from:'tim_bkin / tim_sys_brk / tim_brk_cmp / BG',to:'tim_brk / BIF',u:'对刹车源做极性选择与滤波，产生 tim_brk 事件。',n:'图 675'},
+{id:'tim_ocref_clr_src',a:'AF2.OCRSEL',en:'OCREF clear source selection',zh:'OCREF 清除源选择',t:'bit',from:'AF2 寄存器',to:'tim_ocref_clr',u:'选择哪个内部信号可以逐周期清 OCREF（比较器、其它定时器事件等）。',n:'RM0456 p.2376'},
+{id:'trigger_controller_dead',a:'TRC',en:'Trigger controller signal',zh:'触发控制器输出',t:'trig',from:'Trigger controller',to:'从模式控制器',u:'内部触发总线。',n:'图 675'}
+];
+</script>
+<script>
+/* ============================================================
+   1. 场景脚本
+   ============================================================ */
+const SCENES = [
+{id:'count', grp:'基础', name:'基础计数链', sub:'PSC → CNT → ARR → UEV', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:false,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1,cc1e:1,cc1ne:1,cc2e:1,bke:0,bkin:0,aoe:1},
+ trigi:'none', regs:['CR1.CEN','CR1.ARPE','CR1.OPM','PSC.PSC','ARR.ARR','SR.UIF'],
+ steps:[
+  {t:'时钟进入：tim_ker_ck',d:'RCC 的 TIMxCLK 选择器把内核时钟送到 <code>tim_ker_ck</code>。它必须与 <code>tim_pclk</code> 同源、且分频比是 1–16 的整数，否则寄存器写入与计数节拍不同步。此时 CEN=0，计数器不动。',run:0,hi:['tim_ker_ck','psc','cnt']},
+  {t:'PSC 分频：tim_psc_ck → tim_cnt_ck',d:'设 <code>PSC=3</code>，即 4 分频：每 4 个 <code>tim_ker_ck</code> 才产生 1 个 <code>tim_cnt_ck</code>。PSC 带预装载，运行中修改要等下一个 UEV 才生效。',run:10,cfg:{psc:3},hi:['tim_psc_ck','PSC','tim_cnt_ck']},
+  {t:'ARR 决定周期',d:'设 <code>ARR=9</code>，计数器 0→9 共 10 个计数为一个周期。ARPE=1 时写入 ARR 先进预装载寄存器，UEV 时才搬进影子寄存器。',run:0,cfg:{arr:9},hi:['ARR','arr']},
+  {t:'CEN=1，CNT 开始向上计数',d:'软件置 <code>CR1.CEN=1</code>。此后 CNT 每来一个 <code>tim_cnt_ck</code> 加 1，到 ARR 后回 0。',run:26,cfg:{cen:true},hi:['CEN','CNT','cnt','tim_cnt_ck']},
+  {t:'溢出 → UEV → UIF → 中断',d:'CNT 从 ARR 回 0 时产生 <b>UEV</b>：预装载值搬入影子寄存器、重复计数器复位、<b>UIF</b> 置 1。若 <code>DIER.UIE=1</code>，UIF 经 IRQ interface 汇总成 <code>tim_it</code> 送 NVIC。',run:18,hi:['UEV','UIF','tim_it','irq_if'],regs:['DIER.UIE','SR.UIF']}
+ ],
+ code:'/* 1 kHz 更新中断：f_CK=16 MHz，PSC=15，ARR=999 */\nh tim15.Instance = TIM15;\nhtim15.Init.Prescaler = 15;\nhtim15.Init.CounterMode = TIM_COUNTERMODE_UP;\nhtim15.Init.Period = 999;\nhtim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;\nhtim15.Init.RepetitionCounter = 0;\nhtim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;\nHAL_TIM_Base_Init(&htim15);\nHAL_TIM_Base_Start_IT(&htim15);   /* CEN=1 + UIE=1 */\n\nvoid TIM15_IRQHandler(void){ HAL_TIM_IRQHandler(&htim15); }\nvoid HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *h){\n  if (h->Instance == TIM15) { /* 每 1 ms 执行一次 */ }\n}'},
+
+{id:'capture', grp:'输入', name:'输入捕获', sub:'TI1 → 滤波 → 边沿 → CCR1', dev:'15',
+ cfg:{psc:0,arr:65535,ccr1:0,ccr2:0,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'in',cc2s:'in',ocm:0,moe:1,dtg:0,arpe:1},
+ trigi:'none', regs:['CCMR1.CC1S','CCMR1.IC1F','CCMR1.IC1PSC','CCER.CC1P','CCER.CC1E','SR.CC1IF','CCR1.CCR1'],
+ steps:[
+  {t:'TI1 从引脚进入',d:'GPIO 复用为 TIM15_CH1，信号经 AF 进入 <code>tim_ti1_in</code>。把 <code>CCMR1.CC1S=01</code> 后通道 1 切到输入模式，输出通路被断开。',run:0,hi:['tim_ti1_in','ti1f']},
+  {t:'数字滤波：IC1F + CKD',d:'<code>CKD</code> 先给滤波器定采样时基 <code>t_DTS</code>；<code>IC1F</code> 再选采样点数 N。只有连续 N 个采样都相同才认为电平有效，窄于 N×t_DTS 的毛刺被吃掉。',run:12,cfg:{ckd:1},hi:['ti1f','IC1F','CKD']},
+  {t:'边沿检测与 IC1 预分频',d:'<code>CC1P</code> 选上升/下降沿；<code>IC1PSC</code> 设为 2 分频时，每 2 个有效边沿才输出一次 <code>tim_ic1</code>。',run:20,hi:['tim_ti1f_ed','ic1ps','tim_ic1']},
+  {t:'捕获：当前 CNT 锁存进 CCR1',d:'<code>tim_ic1</code> 到来时，硬件把当前 CNT 复制到 CCR1 并置 <code>CC1IF</code>。两次捕获值之差就是一个信号周期，与软件延迟无关。',run:40,hi:['tim_ic1','CC1IF','CCR1','ccr1'],regs:['SR.CC1IF','DIER.CC1IE']},
+  {t:'换算频率',d:'捕获差值 ΔCCR=20（示例），则信号周期 = ΔCCR × (PSC+1) / f_CK。若 f_CK=16 MHz、PSC=0，则 f = 800 kHz。',run:14,hi:['tim_cc1_dma','tim_it']}
+ ],
+ code:'/* 输入捕获：测 TIM15_CH1 上升沿周期 */\nsConfig.IC1Polarity = TIM_IC_POLARITY_RISING;\nsConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;\nsConfig.IC1Prescaler = TIM_ICPSC_DIV1;\nsConfig.IC1Filter = 8;              /* 8 个采样投票 */\nHAL_TIM_IC_ConfigChannel(&htim15, &sConfig, TIM_CHANNEL_1);\nHAL_TIM_IC_Start_IT(&htim15, TIM_CHANNEL_1);\n\n/* 回调里读两次捕获值算频率 */\nvoid HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *h){\n  uint32_t v = HAL_TIM_ReadCapturedValue(h, TIM_CHANNEL_1);\n  /* period = v - last; f = f_CK / ((PSC+1) * period) */\n}'},
+
+{id:'pwm', grp:'输出', name:'PWM + 死区 + 互补', sub:'CCR → OCREF → DTG → OC1/OC1N', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:3,arpe:1,cc1e:1,cc1ne:1,cc2e:1},
+ trigi:'none', regs:['CCMR1.OC1M','CCMR1.OC1PE','CCER.CC1E','CCER.CC1NE','BDTR.MOE','BDTR.DTG'],
+ steps:[
+  {t:'通道切输出 + PWM 模式 1',d:'<code>CC1S=00</code> 走输出方向，<code>OC1M=110</code> 选 PWM 模式 1：CNT &lt; CCR1 时 <code>tim_oc1ref</code> 为有效电平。',run:8,hi:['CCMR1','OC1M','tim_oc1ref']},
+  {t:'占空比由 CCR1 决定',d:'ARR=9、CCR1=5 → 占空比约 50%。<code>OC1PE=1</code> 时 CCR1 写入先进预装载，UEV 时生效，避免切换占空比时出现窄脉冲。',run:20,hi:['CCR1','CCR1','ccr1']},
+  {t:'使能输出与 MOE',d:'<code>CCER.CC1E/CC1NE</code> 打开 OC1 与 OC1N，<code>BDTR.MOE=1</code> 打开总闸。MOE=0 时输出被强制到空闲电平，而不是继续跑波形。',run:10,hi:['CCER','MOE','output_control','tim_oc1']},
+  {t:'死区插入：OC1 与 OC1N 不同时导通',d:'<code>DTG[7:0]</code> 把上升沿延后 t_DTG。设 DTG=3，OC1 变低后要等 3 个 t_DTS，OC1N 才变高；反之亦然。这个间隙就是死区。',run:30,hi:['DTG','dtg','tim_oc1n','tim_oc1']},
+  {t:'观察互补波形与占空比',d:'OC1 与 OC1N 严格互补且带死区；ARR 改变周期、CCR1 改变占空比，两者互不影响（PWM 模式 1）。',run:30,hi:['tim_oc1','tim_oc1n','tim_oc2']}
+ ],
+ code:'/* TIM15 CH1/CH1N：10 kHz PWM，50% 占空比，死区 100 ns */\nhtim15.Init.Prescaler = 0;\nhtim15.Init.Period = 1599;          /* 16 MHz / 1600 = 10 kHz */\nHAL_TIM_PWM_Init(&htim15);\n\nsConfig.OCMode = TIM_OCMODE_PWM1;\nsConfig.Pulse = 800;                /* 50% */\nsConfig.OCNPolarity = TIM_OCNPOLARITY_HIGH;\nsConfig.OCIdleState = TIM_OCIDLESTATE_RESET;\nsConfig.OCNIdleState = TIM_OCNIDLESTATE_RESET;\nHAL_TIM_PWM_ConfigChannel(&htim15, &sConfig, TIM_CHANNEL_1);\n\n__HAL_TIM_MOE_ENABLE(&htim15);      /* BDTR.MOE=1 */\nHAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_1);\nHAL_TIMEx_ComplPWM_Start(&htim15, TIM_CHANNEL_1);\n/* 死区由 BDTR.DTG 设置，HAL 用 sBreakDeadTimeConfig.DeadTime */'},
+
+{id:'opm', grp:'输出', name:'单脉冲 OPM', sub:'一个周期后自动停', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:1,cen:false,mms:'update',sms:'trigger',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:1,arpe:1,cc1e:1,cc1ne:1,cc2e:1},
+ trigi:'square', regs:['CR1.OPM','CR1.CEN','SMCR.SMS','BDTR.MOE'],
+ steps:[
+  {t:'OPM=1：只走一个周期',d:'<code>CR1.OPM=1</code> 后，计数器在下一次 UEV 自动清 <code>CEN</code>，因此只会输出一个脉冲或一个 PWM 周期。',run:0,hi:['OPM','CEN']},
+  {t:'两种启动方式',d:'可以由软件写 <code>CEN=1</code> 启动，也可以置 <code>SMS=0110</code>（触发模式）让 <code>tim_trgi</code> 的上升沿启动，做到与外部事件严格同步。',run:14,hi:['SMS','tim_trgi','tim_trc']},
+  {t:'一个周期结束，CEN 自动清零',d:'CNT 到达 ARR 产生 UEV 的同时，硬件把 CEN 清 0。注意此时定时器并没有被复位，计数值停在 0，等待下一次启动条件。',run:26,hi:['UEV','CEN','cnt'],regs:['CR1.CEN']},
+  {t:'典型用途',d:'超声波发射、单次精确延时、步进电机给一个脉冲、与外部事件对齐的“打一枪”。',run:0,hi:['tim_oc1']}
+ ],
+ code:'/* 单脉冲：TRGI 上升沿启动，输出一个 1 ms 脉冲 */\nhtim15.Init.Period = 15999;         /* 1 ms @16 MHz */\nhtim15.Init.OnePulseMode = TIM_OPMODE_SINGLE;\nsConfig.OCMode = TIM_OCMODE_PWM2;   /* 单脉冲常用 PWM2 */\nsConfig.Pulse = 8000;\nHAL_TIM_OnePulse_Init(&htim15, TIM_OPMODE_SINGLE);\nHAL_TIM_OnePulse_Start(&htim15, TIM_CHANNEL_1);\n/* 触发源：slaveConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER */'},
+
+{id:'sms_reset', grp:'从模式', name:'从模式 · 复位', sub:'SMS=0100', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'reset',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'square', regs:['SMCR.SMS','SMCR.TS','SMCR.MSM','CNT.CNT'],
+ steps:[
+  {t:'从模式是什么',d:'<code>SMCR.SMS</code> 选择从模式，<code>TS[4:0]</code> 从 ITR / TI1FP1 / TI2FP2 中选一路作为 <code>tim_trgi</code>。从模式让定时器“听别人的”。',run:0,hi:['slave_controller','SMS','TS','tim_trgi']},
+  {t:'SMS=0100：复位模式',d:'本例 <code>TS=ITR2</code>（TIM3_TRGO）。<code>tim_trgi</code> 每来一个上升沿，CNT 与 PSC 预分频计数器被强制清零，并产生一次 UEV。',run:18,hi:['tim_itr','tim_trgi','tim_trc','CNT'],regs:['SMCR.SMS']},
+  {t:'效果：从定时器被“对齐”',d:'从定时器的周期不再由自己决定，而是被主定时器的 TRGO 强制同步；适合多路 PWM 需要同相位启动的场合。',run:30,hi:['tim_ptr','CNT','cnt','UEV']},
+  {t:'TS 可选源（TIM15）',d:'ITR0–5 = TIM1/2/3/4/5/8 的 TRGO，ITR7 = TIM16_OC1，ITR8 = TIM17_OC1；也可选 TI1F_ED、TI1FP1、TI2FP2。',run:0,hi:['tim_itr','ITR','tim_ti1fp1']}
+ ],
+ code:'/* 用 TIM3_TRGO 复位 TIM15 计数器 */\nsConfig.SlaveMode = TIM_SLAVEMODE_RESET;\nsConfig.InputTrigger = TIM_TS_ITR2;   /* ITR2 = TIM3_TRGO */\nsConfig.TriggerPolarity = TIM_TRIGGERPOLARITY_RISING;\nsConfig.TriggerFilter = 0;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);'},
+
+{id:'sms_gated', grp:'从模式', name:'从模式 · 门控', sub:'SMS=0101', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'gated',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'square', regs:['SMCR.SMS','SMCR.TS','CNT.CNT'],
+ steps:[
+  {t:'SMS=0101：门控模式',d:'<code>tim_trgi</code> 为高电平时计数，低电平时计数器停在当前值——注意是“暂停”，不是清零。',run:0,hi:['SMS','tim_trgi','CNT']},
+  {t:'观察计数被“夹断”',d:'TRGI 每次变低，CNT 保持；变高继续。因此 CNT 的增量正好等于门控高电平的时间。',run:36,hi:['tim_trgi','tim_cnt_ck','cnt']},
+  {t:'用途：测量外部脉冲宽度',d:'把被测信号接到 TI1，SMS=门控，TS=TI1FP1，读 CNT 就得到高电平持续了多少个计数。',run:16,hi:['tim_ti1fp1','CNT']}
+ ],
+ code:'sConfig.SlaveMode = TIM_SLAVEMODE_GATED;\nsConfig.InputTrigger = TIM_TS_TI1FP1;   /* 外部信号门控 */\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);'},
+
+{id:'sms_trigger', grp:'从模式', name:'从模式 · 触发启动', sub:'SMS=0110', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:false,mms:'update',sms:'trigger',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'square', regs:['SMCR.SMS','SMCR.TS','CR1.CEN'],
+ steps:[
+  {t:'SMS=0110：触发模式',d:'计数器平时停着；<code>tim_trgi</code> 出现上升沿时，硬件自动把 CEN 置 1，开始计数，之后自由运行。',run:0,hi:['SMS','tim_trgi']},
+  {t:'上升沿到来，CEN 由硬件置位',d:'这一下是硬件完成的，软件不用写 CR1，因此启动时刻与外部事件严格对齐（没有中断延迟）。',run:14,hi:['CEN','tim_trc','tim_cnt_ck']},
+  {t:'用途：多机同步启动',d:'一个主定时器 TRGO 同时触发多个从定时器，实现多路 PWM 同相位；也可用于事件到来才开始计时。',run:26,hi:['tim_itr','tim_trgo']}
+ ],
+ code:'sConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER;\nsConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);   /* 只是使能，等待触发沿 */'},
+
+{id:'sms_extclk', grp:'从模式', name:'从模式 · 外部时钟 1', sub:'SMS=0111', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'extclk',ts:'ti1fp1',cc1s:'in',cc2s:'in',ocm:0,moe:1,dtg:0,arpe:1},
+ trigi:'square', regs:['SMCR.SMS','SMCR.TS','CNT.CNT'],
+ steps:[
+  {t:'SMS=0111：外部时钟模式 1',d:'计数器的时钟不再来自 <code>tim_ker_ck</code>，而是来自 <code>tim_trgi</code> 的每个上升沿。PSC 仍可对这个外部时钟再分频。',run:0,hi:['SMS','tim_trgi','tim_cnt_ck']},
+  {t:'每个上升沿 CNT+1',d:'TRGI 的频率就是计数频率；计数器从脉冲计数器变成“事件计数器”。',run:40,hi:['tim_trgi','CNT','cnt']},
+  {t:'用途：计脉冲个数',d:'流量计、编码器（单路）、外部时钟分频输出；配合捕获还能测外部脉冲频率。',run:14,hi:['tim_ti1fp1','CCR1']}
+ ],
+ code:'sConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;\nsConfig.InputTrigger = TIM_TS_TI1FP1;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);\n/* PSC 仍可对外部时钟再分频 */'},
+
+{id:'sms_combo', grp:'从模式', name:'从模式 · 组合模式', sub:'SMS=1000 / 1001', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'resett',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'square', regs:['SMCR.SMS','SMCR.TS'],
+ steps:[
+  {t:'SMS=1000：复位 + 触发',d:'上升沿先把 CNT 清零（复位），同时把 CEN 置 1（触发）。等于“每次事件都重新开始计时”，适合周期测量的起始沿。',run:20,hi:['SMS','tim_trgi','CNT']},
+  {t:'SMS=1001：门控 + 复位',d:'高电平期间计数，上升沿时额外把计数器清零。与纯门控的区别是：每次开门都从 0 重新计。',run:24,hi:['SMS','tim_trgi','cnt']},
+  {t:'怎么选',d:'要“每次事件重新计时”选复位+触发；要“只统计高电平宽度且每次从零开始”选门控+复位。',run:12,hi:['slave_controller']}
+ ],
+ code:'/* 组合模式 */\nsConfig.SlaveMode = TIM_SLAVEMODE_COMBINED_RESETTRIGGER;\n/* 或 TIM_SLAVEMODE_COMBINED_GATEDRESET */\nsConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);'},
+
+{id:'master', grp:'主模式', name:'主模式 MMS', sub:'TRGO 输出什么', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'none', regs:['CR2.MMS','CR2.MSM','tim_trgo'],
+ steps:[
+  {t:'MMS 决定 TRGO 的内容',d:'<code>CR2.MMS[2:0]</code> 从本定时器内部挑一个事件送到 <code>tim_trgo</code>，再接到别的定时器的 ITR、ADC 触发或 DMA 请求。',run:0,hi:['MMS','tim_trgo','trigger_controller']},
+  {t:'MMS=000 复位 / 001 使能',d:'000：软件写 UG 时输出一个 TRGO 脉冲；001：TRGO 直接等于 CEN 电平。前者用于“命令复位”，后者用于“同开同关”。',run:10,cfg:{mms:'reset'},hi:['UG','tim_trgo','CEN']},
+  {t:'MMS=010 更新 / 011 比较脉冲',d:'010：每次 UEV 产生 TRGO 脉冲，适合周期同步；011：CC1IF 时产生脉冲，适合“比较点对齐”。',run:20,cfg:{mms:'compare'},hi:['UEV','CC1IF','tim_trgo']},
+  {t:'MMS=100/101：OC1REF / OC2REF',d:'直接把 <code>tim_oc1ref</code> 或 <code>tim_oc2ref</code> 送到 TRGO，常用于级联 PWM 或给 ADC 提供采样窗口。',run:18,cfg:{mms:'oc1ref'},hi:['tim_oc1ref','tim_trgo']},
+  {t:'TIM16/17 没有主模式',d:'手册 p.2385：只有一个通道的定时器不支持主模式（CR2.MMS 保留），但 <code>tim_oc1</code> 仍可作为触发源去触发别的外设。',run:0,hi:['tim_oc1']}
+ ],
+ code:'/* TIM15 更新事件作为 TIM3 的从触发源 */\nmasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;  /* MMS=010 */\nmasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;\nHAL_TIMEx_MasterConfigSynchronization(&htim15, &masterConfig);\n\n/* TIM3 侧：SlaveMode=TRIGGER, InputTrigger=TIM_TS_ITR0 */'},
+
+{id:'break', grp:'安全', name:'刹车输入 Break', sub:'BKIN → MOE=0', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:3,arpe:1,cc1e:1,cc1ne:1,cc2e:1,bke:1,bkin:0,aoe:1,ossi:1},
+ trigi:'none', regs:['BDTR.BKE','BDTR.BKP','BDTR.BKF','BDTR.AOE','BDTR.MOE','SR.BIF'],
+ steps:[
+  {t:'打开刹车：BKE=1',d:'<code>BDTR.BKE=1</code> 打开刹车输入，<code>BKP</code> 选有效极性，<code>BKF</code> 做数字滤波，避免噪声误触发。',run:10,hi:['tim_bkin','break_circuit','BKE']},
+  {t:'刹车有效 → tim_brk → MOE=0',d:'一旦 BKIN 达到有效电平，刹车电路产生 <code>tim_brk</code>，硬件立即把 <code>MOE</code> 清 0，所有 OC/OCN 进入空闲电平（由 OSSI 决定）。',run:4,cfg:{bkin:1},hi:['tim_brk','MOE','output_control','tim_oc1n']},
+  {t:'BIF 置位，可进中断',d:'同时 <code>SR.BIF=1</code>；若 <code>DIER.BIE=1</code>，中断经 <code>tim_it</code> 送 NVIC，软件据此记录故障。',run:8,hi:['BIF','tim_it','irq_if']},
+  {t:'AOE=1：下一个 UEV 自动恢复',d:'AOE=0 时必须软件重新写 MOE；AOE=1 时刹车源消失后，硬件在下一个 UEV 自动把 MOE 置回 1，适合过流自动重启。',run:14,cfg:{bkin:0},hi:['AOE','MOE','UEV']},
+  {t:'另外两路刹车源',d:'比较器刹车 <code>tim_brk_cmp</code>（COMP1/COMP2）适合模拟过流阈值；系统刹车 <code>tim_sys_brk</code> 来自 LOCKUP、PVD、ECC、CSS，属于芯片级安全。',run:0,hi:['tim_brk_cmp','tim_sys_brk','break_circuit']}
+ ],
+ code:'/* 刹车 + 死区 + 自动恢复 */\nsBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;\nsBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;\nsBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;\nsBreakDeadTimeConfig.DeadTime = 3;\nsBreakDeadTimeConfig.BreakState = TIM_BREAK_ENABLE;\nsBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;\nsBreakDeadTimeConfig.BreakFilter = 2;\nsBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;\nHAL_TIMEx_ConfigBreakDeadTime(&htim15, &sBreakDeadTimeConfig);'},
+
+{id:'rep', grp:'基础', name:'重复计数器 RCR', sub:'n+1 个周期一次 UEV', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:2,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'none', regs:['RCR.REP','SR.UIF','CR1.ARPE'],
+ steps:[
+  {t:'RCR 给 UEV 再分频',d:'<code>RCR=2</code>：每 3 个计数周期（2、1、0）才产生一次真正的 UEV，也才置一次 UIF。',run:0,hi:['RCR','rep','UEV']},
+  {t:'观察 UIF 变稀疏',d:'CNT 仍然每个周期溢出，但 UIF/中断只在第 3 次溢出时出现。这样可以把中断频率降到 1/3。',run:60,hi:['UIF','tim_it','CNT']},
+  {t:'用途：N 周期 PWM / 降中断',d:'RCR 常用于生成 N 个周期为一组的 PWM（电机换相），或把高频中断压缩到 CPU 能承受的频率。',run:20,hi:['RCR','tim_cc1_dma']}
+ ],
+ code:'htim15.Init.RepetitionCounter = 2;   /* 每 3 个周期一次 UEV */\nHAL_TIM_Base_Init(&htim15);\n/* 注意：RCR 只在有重复计数器的 TIM 上有效 */'},
+
+{id:'dmaburst', grp:'高级', name:'DMA burst', sub:'DCR + DMAR（图文）', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'none', regs:['DCR.DBA','DCR.DBL','DCR.DBSS','DMAR.DMAR'],
+ steps:[
+  {t:'普通 DMA 请求 vs burst',d:'普通方式一次请求搬一个值；<b>DMA burst</b> 允许一次请求连续读写一组寄存器，由 <code>DCR.DBA</code>（基地址）、<code>DBL</code>（长度）、<code>DBSS</code>（触发源）描述。',run:0,hi:['dma_if','tim_upd_dma']},
+  {t:'典型场景',d:'三相电机控制中，一个更新事件要同时刷新 CCR1、CCR2、CCR3 和 BDTR；burst 把这些写入打包，避免逐个写造成相位不一致。',run:0,hi:['tim_cc1_dma','DMAR','DCR']},
+  {t:'代价与注意',d:'burst 期间会占用总线更久；DBA 必须按字对齐，DBL 超过实际寄存器数会读写到未定义地址，配置前请对照手册 p.2385。',run:0,hi:['dma_if']}
+ ],
+ code:'/* DMA burst：更新事件时连续写 CCR1/CCR2 */\nhdma.Init.PeriphInc = DMA_PINC_ENABLE;   /* burst 需要地址递增 */\n__HAL_TIM_ENABLE_DMA(&htim15, TIM_DMA_UPDATE);\nTIM15->DCR = (0x0u << TIM_DCR_DBA_Pos)   /* 基地址偏移 */\n           | (2u   << TIM_DCR_DBL_Pos)   /* 传输 2 个 16 位 */\n           | (0u   << TIM_DCR_DBSS_Pos);\nTIM15->DMAR = (uint32_t)&burstBuf[0];'},
+
+{id:'devices', grp:'对比', name:'TIM15 / 16 / 17 差异', sub:'能力矩阵', dev:'15',
+ cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
+ trigi:'none', regs:['SMCR.SMS','CR2.MMS'],
+ steps:[
+  {t:'TIM15：功能最全',d:'2 个独立通道、CH1 带互补输出与死区、刹车输入、重复计数器、从模式控制器、主模式 TRGO、DMA burst。基址 0x4001 4000。',run:0,hi:['slave_controller','tim_trgo','tim_oc2']},
+  {t:'TIM16 / TIM17：单通道精简版',d:'只有 1 个通道，<b>没有 SMCR</b>（无从模式）、<b>没有 CCR2/CCMR2</b>、<b>没有 MMS</b>（无 tim_trgo）。保留互补输出、死区、刹车、重复计数器与 DMA burst。基址 0x4001 4400 / 0x4001 4800。',run:0,hi:['slave_controller','tim_trgo','tim_oc2']},
+  {t:'切换设备看图',d:'点上方 TIM16 / TIM17：从模式控制器、MMS/TRGO、CH2 相关通路会<b>整块隐藏</b>并标注“硬件不存在”，而不是简单置灰。',run:0,hi:['m_slave','m_ccr2','tim_trgo']}
+ ],
+ code:'/* 三者的共同点 */\n/* 16 位向上计数、PSC 16 位、RCR 8 位、CH1 互补 + 死区 + 刹车 */\n/* 差异：TIM15 才有 SMCR / CCR2 / CCMR2 / MMS(TRGO) */\n/* TIM16/17 的 CR2[6:4] 为保留位 */'}
+];
+</script>
+<script>
+/* ============================================================
+   2. 寄存器位域定义
+   ============================================================ */
+const REGS = [
+{name:'CR1',off:'0x00',desc:'控制寄存器 1',w:32,fields:[
+ {b:[0,0],n:'CEN',d:'计数器使能',val:()=>S.cfg.cen?1:0},
+ {b:[1,1],n:'UDIS',d:'禁止更新事件'},
+ {b:[2,2],n:'URS',d:'更新请求源选择'},
+ {b:[3,3],n:'OPM',d:'单脉冲模式',val:()=>S.cfg.opm?1:0},
+ {b:[4,4],n:'DIR',d:'计数方向（TIM15/16/17 只支持向上）'},
+ {b:[6,5],n:'CMS',d:'中心对齐模式（本系列保留）'},
+ {b:[7,7],n:'ARPE',d:'自动重装预装载使能',val:()=>S.cfg.arpe?1:0},
+ {b:[9,8],n:'CKD',d:'时钟分频（滤波器/死区时基）',val:()=>S.cfg.ckd||0},
+ {b:[11,11],n:'UIFREMAP',d:'UIF 重映射到 bit31'}
+]},
+{name:'CR2',off:'0x04',desc:'控制寄存器 2',w:32,fields:[
+ {b:[0,0],n:'CCPC',d:'预装载控制（捕获/比较）'},
+ {b:[2,2],n:'CCUS',d:'捕获/比较更新选择'},
+ {b:[3,3],n:'CCDS',d:'捕获/比较 DMA 选择'},
+ {b:[6,4],n:'MMS',d:'主模式选择（TIM16/17 保留）',val:()=>mmsVal()},
+ {b:[7,7],n:'TI1S',d:'TI1 = TI1 XOR TI2'},
+ {b:[8,8],n:'OIS1',d:'OC1 空闲电平'},
+ {b:[9,9],n:'OIS1N',d:'OC1N 空闲电平'},
+ {b:[10,10],n:'OIS2',d:'OC2 空闲电平（TIM15）'}
+]},
+{name:'SMCR',off:'0x08',desc:'从模式控制寄存器（TIM15 专有）',w:32,fields:[
+ {b:[3,0],n:'SMS',d:'从模式选择',val:()=>smsVal()},
+ {b:[6,4],n:'TS',d:'触发源选择',val:()=>tsVal()},
+ {b:[7,7],n:'MSM',d:'主从同步模式'},
+ {b:[24,24],n:'SMSPE',d:'SMS 预装载使能'},
+ {b:[25,25],n:'SMSP',d:'SMS 预装载值'}
+]},
+{name:'CCMR1',off:'0x18',desc:'捕获/比较模式寄存器 1',w:32,fields:[
+ {b:[1,0],n:'CC1S',d:'通道 1 方向（00 输出 / 01 输入）',val:()=>S.cfg.cc1s==='in'?1:0},
+ {b:[3,2],n:'IC1PSC',d:'输入捕获 1 预分频'},
+ {b:[7,4],n:'IC1F',d:'输入捕获 1 滤波'},
+ {b:[6,4],n:'OC1M',d:'输出比较 1 模式（110=PWM1）',val:()=>S.cfg.ocm||0},
+ {b:[3,3],n:'OC1PE',d:'CCR1 预装载使能'},
+ {b:[9,8],n:'CC2S',d:'通道 2 方向',val:()=>S.cfg.cc2s==='in'?1:0},
+ {b:[11,10],n:'IC2PSC',d:'输入捕获 2 预分频'},
+ {b:[15,12],n:'IC2F',d:'输入捕获 2 滤波'},
+ {b:[14,12],n:'OC2M',d:'输出比较 2 模式'}
+]},
+{name:'CCER',off:'0x20',desc:'捕获/比较使能寄存器',w:32,fields:[
+ {b:[0,0],n:'CC1E',d:'CC1 输出/捕获使能',val:()=>S.cfg.cc1e?1:0},
+ {b:[1,1],n:'CC1P',d:'CC1 极性'},
+ {b:[2,2],n:'CC1NE',d:'CC1N 互补输出使能',val:()=>S.cfg.cc1ne?1:0},
+ {b:[3,3],n:'CC1NP',d:'CC1N 极性'},
+ {b:[4,4],n:'CC2E',d:'CC2 使能',val:()=>S.cfg.cc2e?1:0},
+ {b:[5,5],n:'CC2P',d:'CC2 极性'},
+ {b:[6,6],n:'CC2NE',d:'CC2N（TIM15 保留）'},
+ {b:[7,7],n:'CC2NP',d:'CC2N 极性'}
+]},
+{name:'BDTR',off:'0x44',desc:'刹车与死区寄存器',w:32,fields:[
+ {b:[7,0],n:'DTG',d:'死区时间发生器',val:()=>S.cfg.dtg||0},
+ {b:[9,8],n:'LOCK',d:'配置锁定'},
+ {b:[10,10],n:'OSSI',d:'空闲态关闭电平'},
+ {b:[11,11],n:'OSSR',d:'运行态关闭电平'},
+ {b:[12,12],n:'BKE',d:'刹车使能',val:()=>S.cfg.bke?1:0},
+ {b:[13,13],n:'BKP',d:'刹车极性'},
+ {b:[14,14],n:'AOE',d:'自动输出使能',val:()=>S.cfg.aoe?1:0},
+ {b:[15,15],n:'MOE',d:'主输出使能',val:()=>S.rt.moe?1:0},
+ {b:[19,16],n:'BKF',d:'刹车滤波'},
+ {b:[28,28],n:'BKBID',d:'双向刹车'}
+]},
+{name:'DIER',off:'0x0C',desc:'DMA/中断使能寄存器',w:32,fields:[
+ {b:[0,0],n:'UIE',d:'更新中断使能'},
+ {b:[1,1],n:'CC1IE',d:'CC1 中断使能'},
+ {b:[2,2],n:'CC2IE',d:'CC2 中断使能'},
+ {b:[5,5],n:'COMIE',d:'换相中断使能'},
+ {b:[7,7],n:'BIE',d:'刹车中断使能'},
+ {b:[8,8],n:'UDE',d:'更新 DMA 使能'},
+ {b:[9,9],n:'CC1DE',d:'CC1 DMA 使能'},
+ {b:[10,10],n:'CC2DE',d:'CC2 DMA 使能'},
+ {b:[15,15],n:'BDE',d:'刹车 DMA 使能'}
+]},
+{name:'SR',off:'0x10',desc:'状态寄存器',w:32,fields:[
+ {b:[0,0],n:'UIF',d:'更新中断标志',val:()=>S.rt.uif?1:0},
+ {b:[1,1],n:'CC1IF',d:'捕获/比较 1 标志',val:()=>S.rt.cc1if?1:0},
+ {b:[2,2],n:'CC2IF',d:'捕获/比较 2 标志',val:()=>S.rt.cc2if?1:0},
+ {b:[7,7],n:'BIF',d:'刹车中断标志',val:()=>S.rt.bif?1:0},
+ {b:[9,9],n:'CC1OF',d:'捕获 1 溢出标志'},
+ {b:[10,10],n:'CC2OF',d:'捕获 2 溢出标志'}
+]},
+{name:'EGR',off:'0x14',desc:'事件产生寄存器',w:32,fields:[
+ {b:[0,0],n:'UG',d:'软件产生更新事件'},
+ {b:[1,1],n:'CC1G',d:'软件产生捕获/比较 1 事件'},
+ {b:[2,2],n:'CC2G',d:'软件产生捕获/比较 2 事件'},
+ {b:[5,5],n:'COMG',d:'软件产生换相事件'},
+ {b:[7,7],n:'BG',d:'软件产生刹车事件'}
+]},
+{name:'CNT',off:'0x24',desc:'计数器',w:16,fields:[{b:[15,0],n:'CNT',d:'当前计数值',val:()=>S.rt.cnt}]},
+{name:'PSC',off:'0x28',desc:'预分频器',w:16,fields:[{b:[15,0],n:'PSC',d:'分频比 = PSC+1',val:()=>S.cfg.psc}]},
+{name:'ARR',off:'0x2C',desc:'自动重装寄存器',w:16,fields:[{b:[15,0],n:'ARR',d:'计数周期 = ARR+1',val:()=>S.cfg.arr}]},
+{name:'RCR',off:'0x30',desc:'重复计数器',w:16,fields:[{b:[7,0],n:'REP',d:'每 REP+1 个周期一次 UEV',val:()=>S.cfg.rcr}]},
+{name:'CCR1',off:'0x34',desc:'捕获/比较 1',w:16,fields:[{b:[15,0],n:'CCR1',d:'捕获值 / 比较值',val:()=>S.cfg.cc1s==='in'?S.rt.ccr1Cap:S.cfg.ccr1}]},
+{name:'CCR2',off:'0x38',desc:'捕获/比较 2（TIM15）',w:16,fields:[{b:[15,0],n:'CCR2',d:'第二通道捕获/比较值',val:()=>S.cfg.cc2s==='in'?S.rt.ccr2Cap:S.cfg.ccr2}]},
+{name:'DCR',off:'0x3DC',desc:'DMA 控制寄存器',w:32,fields:[
+ {b:[4,0],n:'DBA',d:'DMA 基地址偏移'},
+ {b:[12,8],n:'DBL',d:'burst 传输长度'},
+ {b:[18,16],n:'DBSS',d:'burst 源选择'}
+]},
+{name:'DMAR',off:'0x3E0',desc:'DMA 全传输地址',w:32,fields:[{b:[31,0],n:'DMAR',d:'burst 访问的寄存器地址',val:()=>0x40014034}]}
+];
+/* ============================================================
+   3. 状态与仿真
+   ============================================================ */
+const CFG0 = {
+  psc:0, arr:9, ccr1:5, ccr2:3, rcr:0, opm:0, cen:true,
+  mms:'update', sms:'off', ts:'itr2', cc1s:'out', cc2s:'out', ocm:6,
+  moe:1, dtg:2, arpe:1, cc1e:1, cc1ne:1, cc2e:1, bke:0, bkin:0, aoe:1, ckd:1,
+  trigiMode:'square'
+};
+const S = {
+  cfg: {...CFG0},
+  rt: {},
+  scene:0, step:0, playing:false, speed:2, device:'TIM15',
+  samples:[], focus:'all', hiRegs:[], stepTicks:0
+};
+window.__tim = S;
+
+const $ = (s,r)=> (r||document).querySelector(s);
+const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+
+function resetRuntime(){
+  const c = S.cfg;
+  S.rt = {
+    tick:0, cnt:0, pscAcc:0, rep:c.rcr,
+    uif:0, cc1if:0, cc2if:0, bif:0,
+    uifPulse:0, cc1Pulse:0, bifPulse:0, uevPulse:0, ugPulse:0,
+    moe:c.moe, oc1:0, oc1n:0, oc2:0, oc1ref:0, trgo:0,
+    trgi:0, trgiPrev:0, ti1Prev:0, inject:0, manual:0,
+    ccr1Cap:0, ccr2Cap:0,
+    refPrev:0, pend1:0, pend1n:0
+  };
+  S.samples = [];
+}
+
+function sc(){ return SCENES[S.scene]; }
+function isV15Scene(i){
+  return ['sms_reset','sms_gated','sms_trigger','sms_extclk','sms_combo','master'].indexOf(SCENES[i].id) >= 0;
+}
+
+/* ---------- 时钟 / 触发输入 ---------- */
+function trigLevel(){
+  const c = S.cfg, r = S.rt;
+  if(r.inject > 0){ r.inject--; return 1; }
+  if(c.trigiMode === 'square'){
+    const p = 24;
+    return (r.tick % p) < p/2 ? 1 : 0;
+  }
+  if(c.trigiMode === 'manual') return r.manual ? 1 : 0;
+  return 0;
+}
+function ti1Level(){
+  return (S.rt.tick % 20) < 10 ? 1 : 0;
+}
+
+/* ---------- 核心单步 ---------- */
+function oneTick(){
+  const c = S.cfg, r = S.rt;
+  r.tick++;
+
+  r.trgiPrev = r.trgi;
+  r.trgi = trigLevel();
+  const rise = r.trgi && !r.trgiPrev;
+
+  /* 刹车 */
+  if(c.bke && c.bkin && r.moe){
+    r.moe = 0; r.bif = 1; r.bifPulse = 8;
+    r.oc1 = r.oc1n = r.oc2 = 0; r.pend1 = r.pend1n = 0;
+  }
+
+  /* 从模式控制器 */
+  let count = c.cen;
+  switch(c.sms){
+    case 'reset':
+      if(rise){ r.cnt = 0; r.pscAcc = 0; r.rep = c.rcr; commitUEV(); }
+      break;
+    case 'gated':
+      count = c.cen && r.trgi;
+      break;
+    case 'trigger':
+      if(rise) c.cen = true;
+      break;
+    case 'extclk':
+      count = false;
+      if(rise) stepCounter();
+      break;
+    case 'resett':
+      if(rise){ r.cnt = 0; r.pscAcc = 0; r.rep = c.rcr; c.cen = true; commitUEV(); }
+      break;
+    case 'gatedreset':
+      if(rise){ r.cnt = 0; r.pscAcc = 0; commitUEV(); }
+      count = c.cen && r.trgi;
+      break;
+  }
+
+  if(count) clockCounter();
+
+  /* 输入捕获 */
+  if(c.cc1s === 'in'){
+    const t1 = ti1Level();
+    if(t1 && !r.ti1Prev){
+      r.ccr1Cap = r.cnt;
+      r.cc1if = 1; r.cc1Pulse = 6;
+    }
+    r.ti1Prev = t1;
+  }
+
+  computeOutputs();
+  if(r.uifPulse > 0) r.uifPulse--;
+  if(r.cc1Pulse > 0) r.cc1Pulse--;
+  if(r.bifPulse > 0) r.bifPulse--;
+  if(r.uevPulse > 0) r.uevPulse--;
+  if(r.ugPulse > 0) r.ugPulse--;
+
+  S.samples.push({
+    cnt:r.cnt, arr:c.arr, ccr1:c.ccr1, ccr2:c.ccr2,
+    oc1:r.oc1, oc1n:r.oc1n, oc2:r.oc2, trgi:r.trgi,
+    uif:r.uifPulse>0?1:0, cc1if:r.cc1Pulse>0?1:0,
+    bif:r.bifPulse>0?1:0, trgo:r.trgo
+  });
+  if(S.samples.length > 480) S.samples.shift();
+}
+
+function clockCounter(){
+  const c = S.cfg, r = S.rt;
+  if(c.psc > 0){
+    if(++r.pscAcc > c.psc){ r.pscAcc = 0; stepCounter(); }
+  } else stepCounter();
+}
+function stepCounter(){
+  const c = S.cfg, r = S.rt;
+  r.cnt++;
+  if(r.cnt > c.arr){
+    r.cnt = 0;
+    if(r.rep > 0) r.rep--;
+    else { r.rep = c.rcr; commitUEV(); }
+  }
+  if(c.cc1s === 'out' && c.ocm >= 6 && r.cnt === c.ccr1){
+    r.cc1if = 1; r.cc1Pulse = Math.max(r.cc1Pulse, 4);
+  }
+}
+function commitUEV(){
+  const c = S.cfg, r = S.rt;
+  r.uevPulse = 3; r.uif = 1; r.uifPulse = 5;
+  if(c.opm) c.cen = false;
+  if(c.aoe && !c.bkin && !r.moe) r.moe = 1;
+}
+
+/* ---------- 输出级 ---------- */
+function computeOutputs(){
+  const c = S.cfg, r = S.rt;
+  let ref1 = 0, ref2 = 0;
+  if(c.cc1s === 'out'){
+    if(c.ocm === 6) ref1 = r.cnt < c.ccr1 ? 1 : 0;
+    else if(c.ocm === 7) ref1 = r.cnt < c.ccr1 ? 0 : 1;
+  }
+  if(c.cc2s === 'out') ref2 = r.cnt < c.ccr2 ? 1 : 0;
+  r.oc1ref = ref1;
+
+  const moe = r.moe ? 1 : 0;
+  if(!moe){
+    r.oc1 = r.oc1n = r.oc2 = 0;
+    r.refPrev = ref1; r.pend1 = r.pend1n = 0;
+    r.trgo = trgoValue(ref1, ref2);
+    return;
+  }
+
+  if(ref1 !== r.refPrev){
+    if(ref1){ r.oc1n = 0; r.pend1 = c.dtg || 0; }
+    else { r.oc1 = 0; r.pend1n = c.dtg || 0; }
+    r.refPrev = ref1;
+  }
+  if(r.pend1 > 0 && --r.pend1 === 0) r.oc1 = 1;
+  if(r.pend1n > 0 && --r.pend1n === 0) r.oc1n = 1;
+
+  if(!c.cc1e) r.oc1 = 0;
+  if(!c.cc1ne) r.oc1n = 0;
+  r.oc2 = c.cc2e ? ref2 : 0;
+
+  r.trgo = trgoValue(ref1, ref2);
+}
+function trgoValue(ref1, ref2){
+  const c = S.cfg, r = S.rt;
+  switch(c.mms){
+    case 'reset': return r.ugPulse > 0 ? 1 : 0;
+    case 'enable': return c.cen ? 1 : 0;
+    case 'update': return r.uevPulse > 0 ? 1 : 0;
+    case 'compare': return r.cc1Pulse > 0 ? 1 : 0;
+    case 'oc1ref': return ref1;
+    case 'oc2ref': return ref2;
+    default: return 0;
+  }
+}
+
+function runTicks(n){ for(let i=0;i<n;i++) oneTick(); }
+
+/* ============================================================
+   4. 场景 / 步骤
+   ============================================================ */
+function rebuildCfg(n){
+  const base = {...CFG0, ...sc().cfg};
+  base.trigiMode = sc().trigi === 'none' ? 'manual' : 'square';
+  for(let i=0;i<=n;i++){
+    const st = sc().steps[i];
+    if(st && st.cfg) Object.assign(base, st.cfg);
+  }
+  S.cfg = base;
+}
+function gotoStep(n, fresh){
+  const steps = sc().steps;
+  n = Math.max(0, Math.min(steps.length-1, n));
+  if(fresh){
+    rebuildCfg(-1);
+    resetRuntime();
+    for(let i=0;i<=n;i++){
+      const st = steps[i];
+      if(st.cfg) Object.assign(S.cfg, st.cfg);
+      if(st.cfg && st.cfg.rcr !== undefined) S.rt.rep = S.cfg.rcr;
+      if(st.run) runTicks(st.run);
+    }
+  }else{
+    const st = steps[n];
+    if(st.cfg) Object.assign(S.cfg, st.cfg);
+    if(st.cfg && st.cfg.rcr !== undefined) S.rt.rep = S.cfg.rcr;
+    if(st.run) runTicks(st.run);
+  }
+  S.step = n;
+  S.stepTicks = 0;
+  const st = steps[n];
+  if(S.cfg.mms === 'reset') S.rt.ugPulse = 4;
+  S.hiRegs = (st.regs || []).slice();
+  setHighlight(st.hi || []);
+  renderStep();
+  renderRegs();
+  drawWave();
+}
+function selectScene(i){
+  if(S.device !== 'TIM15' && isV15Scene(i)){
+    $('#stepNote').innerHTML = '<b>TIM15 专有</b>：该功能依赖 SMCR / MMS / TRGO，TIM16/17 硬件不存在，请切回 TIM15。';
+    return;
+  }
+  S.scene = i; S.playing = false; updatePlayBtn();
+  $$('#sceneList .sbtn').forEach((b,k)=> b.classList.toggle('on', k===i));
+  const s = sc();
+  $('#sceneGroup').textContent = s.grp;
+  $('#sceneName').textContent = s.name + ' · ' + s.sub;
+  gotoStep(0, true);
+  renderRegs();
+  renderCode();
+}
+
+function renderStep(){
+  const s = sc(), st = s.steps[S.step];
+  $('#stepNo').textContent = (S.step+1) + ' / ' + s.steps.length;
+  $('#sceneName').textContent = s.name + ' · ' + s.sub;
+  $('#stepTitle').textContent = st.t;
+  $('#stepDesc').innerHTML = st.d;
+  $('#stepNote').innerHTML = '高亮：' + (st.hi && st.hi.length
+    ? st.hi.map(id=>{ const t = TERMS.find(x=>x.id===id); return t ? '<b>'+t.a+'</b>' : ''; }).filter(Boolean).join(' · ')
+    : '无（纯说明步骤）');
+  $('#stepNote').title = '';
+}
+
+/* 高亮 */
+function setHighlight(ids){
+  const set = new Set(ids);
+  $$('#bdiag .sig, #bdiag .mod').forEach(el=>{
+    const on = set.has(el.dataset.t);
+    el.classList.toggle('hot', on);
+    el.classList.toggle('flow', on && el.classList.contains('sig'));
+  });
+  const dgm = $('#bdiag');
+  dgm.classList.remove('focus');
+}
+
+/* 单击聚焦某个术语（沿其所有连线高亮） */
+function focusTerm(id){
+  const dgm = $('#bdiag');
+  const els = $$('#bdiag [data-t="'+id+'"]');
+  $$('#bdiag .sig, #bdiag .mod').forEach(el=>{
+    el.classList.remove('hot','flow');
+  });
+  if(!els.length){
+    dgm.classList.remove('focus');
+    return;
+  }
+  els.forEach(el=>{
+    el.classList.add('hot');
+    if(el.classList.contains('sig')) el.classList.add('flow');
+  });
+  dgm.classList.add('focus');
+}
+
+/* ============================================================
+   5. 波形
+   ============================================================ */
+const LANES = [
+  {k:'cnt', t:'ana', label:'CNT', color:'#38d0e0'},
+  {k:'oc1', t:'dig', label:'OC1', color:'#ff9f45'},
+  {k:'oc1n',t:'dig', label:'OC1N', color:'#ffc078'},
+  {k:'oc2', t:'dig', label:'OC2', color:'#fbbf24'},
+  {k:'trgi',t:'dig', label:'TRGI', color:'#f472b6'},
+  {k:'uif', t:'dig', label:'UIF', color:'#a78bfa'},
+  {k:'cc1if',t:'dig', label:'CC1IF', color:'#4ade80'},
+  {k:'bif', t:'dig', label:'BIF', color:'#f87171'},
+  {k:'trgo',t:'dig', label:'TRGO', color:'#7dd3fc'}
+];
+let waveH = 196;
+
+function fitCanvas(){
+  const cv = $('#wave');
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(320, Math.floor(rect.width * dpr));
+  cv.height = Math.floor(196 * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  waveH = 196;
+}
+function drawWave(){
+  const cv = $('#wave');
+  if(!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width / (window.devicePixelRatio||1);
+  const H = 196;
+  const L = 40, R = 8, T = 8, B = 8;
+  const plotW = W - L - R;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#080d12';
+  ctx.fillRect(0,0,W,H);
+
+  const samples = S.samples;
+  const n = 480;
+  const start = Math.max(0, samples.length - n);
+  const view = samples.slice(start);
+  const span = Math.max(1, view.length - 1);
+
+  const anaH = 58;
+  const digH = (H - T - B - anaH - 6) / (LANES.length - 1);
+  let y = T;
+
+  LANES.forEach((ln, li)=>{
+    const h = ln.t === 'ana' ? anaH : digH;
+    /* 轨道背景 */
+    ctx.fillStyle = li % 2 ? 'rgba(255,255,255,.012)' : 'rgba(255,255,255,.028)';
+    ctx.fillRect(L, y, plotW, h);
+    /* 基线 */
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.beginPath(); ctx.moveTo(L, y+h-0.5); ctx.lineTo(L+plotW, y+h-0.5); ctx.stroke();
+
+    /* 标签 */
+    ctx.fillStyle = ln.color;
+    ctx.font = '9px ui-monospace, Consolas, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(ln.label, L-5, y + h/2 + 3);
+    ctx.textAlign = 'left';
+
+    if(ln.t === 'ana'){
+      const maxV = Math.max(S.cfg.arr, 8) + 1;
+      const ay = v => y + h - 6 - (v / maxV) * (h - 14);
+      /* ARR / CCR 参考线 */
+      const dashed = (val, col, txt)=>{
+        ctx.save();
+        ctx.strokeStyle = col; ctx.setLineDash([2,3]); ctx.beginPath();
+        ctx.moveTo(L, ay(val)); ctx.lineTo(L+plotW, ay(val)); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = col; ctx.font = '8px ui-monospace, monospace';
+        ctx.fillText(txt, L+2, ay(val)-2);
+      };
+      dashed(S.cfg.arr, 'rgba(255,159,69,.45)', 'ARR');
+      if(S.cfg.cc1s === 'out') dashed(S.cfg.ccr1, 'rgba(56,208,224,.5)', 'CCR1');
+      if(S.cfg.cc2s === 'out' && S.device === 'TIM15') dashed(S.cfg.ccr2, 'rgba(251,191,36,.4)', 'CCR2');
+
+      /* CNT 阶梯 */
+      ctx.strokeStyle = ln.color; ctx.lineWidth = 1.4; ctx.beginPath();
+      let prev = null;
+      view.forEach((s,i)=>{
+        const x = L + (i/span) * plotW;
+        const yy = ay(s.cnt);
+        if(prev === null) ctx.moveTo(x,yy);
+        else { ctx.lineTo(x, prev); ctx.lineTo(x, yy); }
+        prev = yy;
+      });
+      ctx.stroke();
+      /* 当前值 */
+      if(view.length){
+        const last = view[view.length-1];
+        const x = L + ((view.length-1)/span) * plotW;
+        ctx.fillStyle = '#dff6fb';
+        ctx.beginPath(); ctx.arc(x, ay(last.cnt), 2.4, 0, 6.3); ctx.fill();
+      }
+    }else{
+      const hi = y + 5, lo = y + h - 5;
+      ctx.strokeStyle = ln.color; ctx.lineWidth = 1.2; ctx.beginPath();
+      let prev = null;
+      view.forEach((s,i)=>{
+        const x = L + (i/span) * plotW;
+        const yy = s[ln.k] ? hi : lo;
+        if(prev === null) ctx.moveTo(x,yy);
+        else { ctx.lineTo(x, prev); ctx.lineTo(x, yy); }
+        prev = yy;
+      });
+      if(prev !== null){
+        const xEnd = L + ((view.length-1)/span) * plotW;
+        ctx.lineTo(xEnd, prev);
+      }
+      ctx.stroke();
+      /* 高电平填充 */
+      if(view.some(s=>s[ln.k])){
+        ctx.save();
+        ctx.globalAlpha = .10;
+        ctx.fillStyle = ln.color;
+        let sx = null;
+        view.forEach((s,i)=>{
+          const x = L + (i/span) * plotW;
+          if(s[ln.k] && sx === null) sx = x;
+          if((!s[ln.k] || i === view.length-1) && sx !== null){
+            ctx.fillRect(sx, hi, x - sx, lo - hi); sx = null;
+          }
+        });
+        ctx.restore();
+      }
+    }
+    y += h;
+  });
+
+  /* 时间网格 */
+  ctx.strokeStyle = 'rgba(255,255,255,.035)';
+  for(let i=0;i<=4;i++){
+    const x = L + (i/4)*plotW;
+    ctx.beginPath(); ctx.moveTo(x,T); ctx.lineTo(x, H-B); ctx.stroke();
+  }
+}
+
+/* ============================================================
+   6. 寄存器 / 术语表 / 出货清单 / 代码
+   ============================================================ */
+function mmsVal(){
+  return {reset:0,enable:1,update:2,compare:3,oc1ref:4,oc2ref:5}[S.cfg.mms] || 0;
+}
+function smsVal(){
+  return {off:0,reset:4,gated:5,trigger:6,extclk:7,resett:8,gatedreset:9}[S.cfg.sms] || 0;
+}
+function tsVal(){
+  const m = {itr0:0,itr1:1,itr2:2,itr3:3,itr4:4,itr5:5,itr7:7,itr8:8,itr9:9,itr10:10,itr12:16,itr13:17,itr14:18,itr15:19,ti1f_ed:4,ti1fp1:5,ti2fp2:6};
+  return m[S.cfg.ts] !== undefined ? m[S.cfg.ts] : 0;
+}
+function fieldVisible(f, reg){
+  if(reg.name !== 'CCMR1') return true;
+  if(/^IC1/.test(f.n)) return S.cfg.cc1s === 'in';
+  if(/^OC1/.test(f.n)) return S.cfg.cc1s === 'out';
+  if(/^IC2/.test(f.n)) return S.cfg.cc2s === 'in';
+  if(/^OC2/.test(f.n)) return S.cfg.cc2s === 'out';
+  return true;
+}
+function renderRegs(){
+  const wrap = $('#regWrap');
+  if(!wrap) return;
+  const hi = new Set([...(sc().regs||[]), ...(S.hiRegs||[])]);
+  wrap.innerHTML = '';
+  REGS.forEach(reg=>{
+    if(reg.name === 'SMCR' && S.device !== 'TIM15') return;
+    if((reg.name === 'CR2' || reg.name === 'CCMR1' || reg.name === 'CCER') && S.device !== 'TIM15'){
+      /* 仍然显示，但去掉 CH2 字段 */
+    }
+    const box = document.createElement('div'); box.className = 'reg';
+    const head = document.createElement('div'); head.className = 'reg-h';
+    head.innerHTML = '<b>'+reg.name+'</b><span class="off">'+reg.off+'</span><span class="d">'+reg.desc+'</span>';
+    box.appendChild(head);
+
+    const rows = reg.w > 16 ? 2 : 1;
+    for(let row=0; row<rows; row++){
+      const base = row*16;
+      const bits = document.createElement('div'); bits.className = 'bits';
+      for(let i=0;i<16;i++){
+        const d = document.createElement('div'); d.className = 'bit'; d.textContent = base+i;
+        bits.appendChild(d);
+      }
+      box.appendChild(bits);
+      const fields = document.createElement('div'); fields.className = 'fields';
+      reg.fields.forEach(f=>{
+        if(!fieldVisible(f, reg)) return;
+        if(f.b[1] < base || f.b[0] > base+15) return;
+        const b0 = Math.max(f.b[0], base), b1 = Math.min(f.b[1], base+15);
+        const span = b1 - b0 + 1;
+        const d = document.createElement('div');
+        const isHi = hi.has(reg.name + '.' + f.n);
+        d.className = 'fld' + (isHi ? ' hi' : '');
+        d.style.gridColumn = (b0-base+1) + ' / span ' + span;
+        d.textContent = f.n;
+        d.title = f.n + '（bit' + (f.b[0] === f.b[1] ? f.b[0] : f.b[1] + ':' + f.b[0]) + '）：' + f.d;
+        d.dataset.reg = reg.name; d.dataset.fld = f.n;
+        const v = f.val ? f.val() : null;
+        if(v) d.classList.add('v1');
+        fields.appendChild(d);
+      });
+      box.appendChild(fields);
+    }
+    wrap.appendChild(box);
+  });
+  const note = $('#regNote');
+  if(note) note.textContent = S.device === 'TIM15' ? 'TIM15 · 18 个寄存器' : S.device + ' · 无 SMCR / CCR2';
+}
+
+/* 术语表 */
+function typeBadge(t){
+  const def = TYPES[t] || ['—','#888'];
+  return '<span class="ty '+t+'">'+def[0]+'</span>';
+}
+function renderGlossary(){
+  const body = $('#gBody');
+  const q = ($('#gq').value || '').trim().toLowerCase();
+  const active = S.filterType || 'all';
+  const list = TERMS.filter(t=>{
+    if(active !== 'all' && t.t !== active) return false;
+    if(!q) return true;
+    return (t.a+' '+t.en+' '+t.zh+' '+t.from+' '+t.to+' '+t.u).toLowerCase().indexOf(q) >= 0;
+  });
+  body.innerHTML = list.map(t=>(
+    '<tr data-t="'+t.id+'" data-type="'+t.t+'">'+
+      '<td class="ab">'+t.a+(t.d?'<span class="devbadge">'+t.d+'</span>':'')+'</td>'+
+      '<td class="en">'+t.en+'</td>'+
+      '<td>'+t.zh+'</td>'+
+      '<td>'+typeBadge(t.t)+'</td>'+
+      '<td>'+t.from+'</td>'+
+      '<td>'+t.to+'</td>'+
+      '<td>'+t.u+'<div class="mini" style="margin-top:2px">'+t.n+'</div></td>'+
+    '</tr>'
+  )).join('');
+  $('#gCount').textContent = list.length + ' / ' + TERMS.length + ' 条';
+  $$('#gBody tr').forEach(tr=>{
+    tr.addEventListener('click', ()=>{
+      const id = tr.dataset.t;
+      openDrawer(false);
+      focusTerm(id);
+      const el = $('#bdiag [data-t="'+id+'"]');
+      if(el && el.scrollIntoView) el.scrollIntoView({block:'center', behavior:'smooth'});
+    });
+  });
+}
+function renderFilters(){
+  const types = ['all', ...Array.from(new Set(TERMS.map(t=>t.t)))];
+  const box = $('#gFilters');
+  box.innerHTML = types.map(t=>{
+    const label = t === 'all' ? '全部' : (TYPES[t] ? TYPES[t][0] : t);
+    return '<button class="gf'+((S.filterType||'all')===t?' on':'')+'" data-ft="'+t+'">'+label+'</button>';
+  }).join('');
+  $$('#gFilters .gf').forEach(b=> b.addEventListener('click', ()=>{
+    S.filterType = b.dataset.ft; renderFilters(); renderGlossary();
+  }));
+}
+
+/* 出货清单 */
+const DELIVERY = [
+ {t:'tim_it', s:'tim_it', dir:'输出', from:'IRQ interface', to:'NVIC 的 TIMx 全局中断', use:'UIF/CC1IF/CC2IF/BIF 经 DIER 使能后 OR 成一根中断线，软件在 ISR 里分辨标志', lim:'所有型号'},
+ {t:'tim_trgo', s:'tim_trgo', dir:'输出', from:'主模式控制器（MMS）', to:'其它定时器 ITR、ADC 触发、EXTI、DMA', use:'定时器级联、同步 ADC 采样窗口、周期性触发外部事件', lim:'仅 TIM15'},
+ {t:'tim_cc1_dma', s:'tim_cc1_dma', dir:'输出', from:'DMA interface（CC1DE）', to:'DMAMUX → GPDMA/LPDMA', use:'捕获值自动搬运，高速测频不占 CPU', lim:'所有型号'},
+ {t:'tim_upd_dma', s:'tim_upd_dma', dir:'输出', from:'DMA interface（UDE）', to:'DMAMUX → GPDMA/LPDMA', use:'周期搬运缓冲区、DMA burst 刷新 CCR', lim:'所有型号'},
+ {t:'tim_trg_dma', s:'tim_trg_dma', dir:'输出', from:'DMA interface', to:'DMAMUX', use:'事件触发的按需搬运', lim:'仅 TIM15'},
+ {t:'tim_com_dma', s:'tim_com_dma', dir:'输出', from:'DMA interface', to:'DMAMUX', use:'电机换相事件触发 DMA 改写 CCR', lim:'仅 TIM15'},
+ {t:'tim_oc1', s:'tim_oc1', dir:'输出', from:'输出控制 CH1', to:'GPIO AF → TIMx_CH1 引脚', use:'PWM、单脉冲、比较翻转；具体 AF 编号查数据手册引脚定义表', lim:'所有型号'},
+ {t:'tim_oc1n', s:'tim_oc1n', dir:'输出', from:'DTG → 输出控制', to:'GPIO AF → TIMx_CH1N 引脚', use:'半桥/全桥下管驱动，与 OC1 之间带死区', lim:'所有型号'},
+ {t:'tim_oc2', s:'tim_oc2', dir:'输出', from:'输出控制 CH2', to:'GPIO AF → TIMx_CH2 引脚', use:'第二路 PWM；没有互补输出', lim:'仅 TIM15'},
+ {t:'tim_ocref_clr', s:'tim_ocref_clr', dir:'输入', from:'比较器等（AF2.OCRSEL 选择）', to:'输出控制', use:'逐周期限流/峰值电流保护，立即拉低本周期剩余 PWM', lim:'所有型号'},
+ {t:'tim_bkin', s:'tim_bkin', dir:'输入', from:'GPIO AF（TIMx_BKIN）或内部比较器', to:'Break circuitry', use:'过流/过压硬件封锁 PWM，响应无需 CPU', lim:'所有型号'},
+ {t:'tim_sys_brk', s:'tim_sys_brk', dir:'输入', from:'LOCKUP、PVD、SRAM/Flash 双 ECC、CSS', to:'Break circuitry', use:'芯片级故障直接关断功率级', lim:'所有型号'},
+ {t:'tim_brk_cmp', s:'tim_brk_cmp', dir:'输入', from:'COMP1_OUT / COMP2_OUT', to:'Break circuitry', use:'模拟阈值比较刹车，适合过流保护', lim:'所有型号'},
+ {t:'tim_itr', s:'tim_itr[15:0]', dir:'输入', from:'TIM1/2/3/4/5/8 的 TRGO、TIM16/17 的 OC1', to:'TS 多路选择器', use:'把别的定时器当作自己的触发源，实现级联与同步', lim:'仅 TIM15'},
+ {t:'tim_ker_ck', s:'tim_ker_ck', dir:'输入', from:'RCC 的 TIMxCLK 选择器', to:'PSC、数字滤波器采样、死区时基', use:'计数节拍；必须与 tim_pclk 同源且分频比 1–16', lim:'所有型号'}
+];
+function renderDelivery(){
+  const wrap = $('#deliverWrap');
+  if(!wrap) return;
+  const rows = DELIVERY.map(d=>{
+    const term = TERMS.find(x=>x.id===d.t);
+    return '<tr data-t="'+d.t+'">'+
+      '<td class="ab">'+d.s+'</td>'+
+      '<td>'+d.dir+'</td>'+
+      '<td>'+d.from+'</td>'+
+      '<td>'+d.to+'</td>'+
+      '<td>'+d.use+'</td>'+
+      '<td class="mini">'+d.lim+'</td>'+
+    '</tr>';
+  }).join('');
+  wrap.innerHTML = '<div class="deliv-note">说明：NVIC 向量号与 DMAMUX 请求号随封装/型号不同，请以 RM0456 中断与 DMAMUX 章节的表格为准；本表只描述“信号从哪来、到哪去”。</div>'+
+    '<table class="gt"><thead><tr><th style="width:128px">信号</th><th style="width:52px">方向</th><th style="width:180px">来源</th>'+
+    '<th style="width:210px">目的地</th><th>用途</th><th style="width:76px">限制</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  $$('#deliverWrap tbody tr').forEach(tr=>{
+    tr.addEventListener('click', ()=> focusTerm(tr.dataset.t));
+  });
+}
+
+/* 代码 */
+function renderCode(){
+  const wrap = $('#codeWrap');
+  if(!wrap) return;
+  wrap.innerHTML = SCENES.map((s,i)=>(
+    '<details class="codeblk"'+ (i===S.scene?' open':'') +'>'+
+      '<summary>'+s.name+' · '+s.sub+'</summary>'+
+      '<pre></pre><div class="cap">HAL 示例按 U5 固件库命名，仅示意配置顺序与关键位；实际使用请对照 CubeMX 生成的初始化代码。</div>'+
+    '</details>'
+  )).join('');
+  const pres = $$('#codeWrap pre');
+  pres.forEach((p,i)=>{ p.textContent = SCENES[i].code || '/* 本场景无需额外代码 */'; });
+}
+
+/* ============================================================
+   7. 交互绑定
+   ============================================================ */
+let tip = null;
+function showTip(term, x, y){
+  if(!tip) return;
+  const t = TYPES[term.t] || ['—','#888'];
+  tip.innerHTML =
+    '<div class="th"><b>'+term.a+'</b><span>'+t[0]+'</span></div>'+
+    '<div class="zh">'+term.zh+'</div>'+
+    '<div class="en">'+term.en+'</div>'+
+    '<div class="kv"><i>来自</i><span>'+term.from+'</span><i>去往</i><span>'+term.to+'</span></div>'+
+    '<div class="use">'+term.u+'</div>'+
+    '<div class="note">'+term.n+'</div>'+
+    (term.d ? '<span class="dev">仅 TIM'+term.d+'</span>' : '');
+  tip.classList.add('on');
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = x + 14, top = y + 14;
+  if(left + w > window.innerWidth - 10) left = x - w - 14;
+  if(top + h > window.innerHeight - 10) top = y - h - 14;
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, top) + 'px';
+}
+function hideTip(){ if(tip) tip.classList.remove('on'); }
+
+function bindDiagram(){
+  tip = $('#tip');
+  /* 给每条线加一条更宽的透明命中路径 */
+  $$('#bdiag .sig').forEach(p=>{
+    if(p.dataset.hit) return;
+    const h = p.cloneNode();
+    h.setAttribute('class', 'hit' + (p.classList.contains('v15only') ? ' v15only' : ''));
+    h.removeAttribute('marker-end');
+    h.dataset.hit = '1';
+    p.parentNode.insertBefore(h, p.nextSibling);
+  });
+  $$('#bdiag .sig, #bdiag .hit, #bdiag .mod').forEach(el=>{
+    const id = el.dataset.t;
+    const term = TERMS.find(t=>t.id===id);
+    if(!term) return;
+    el.addEventListener('mouseenter', e=> showTip(term, e.clientX, e.clientY));
+    el.addEventListener('mousemove', e=> showTip(term, e.clientX, e.clientY));
+    el.addEventListener('mouseleave', hideTip);
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      focusTerm(id);
+      showTip(term, e.clientX, e.clientY);
+      setTimeout(hideTip, 2600);
+    });
+  });
+  $('#bdiag').addEventListener('click', ()=>{
+    $('#bdiag').classList.remove('focus');
+    hideTip();
+  });
+}
+
+function setDevice(d){
+  S.device = d;
+  $$('.btn.dev').forEach(b=> b.classList.toggle('on', b.dataset.dev === d));
+  const svg = $('#bdiag');
+  $$('#bdiag .v15only').forEach(el=> el.classList.toggle('devhide', d !== 'TIM15'));
+  $('#devNote').textContent = d === 'TIM15'
+    ? 'TIM15：全功能（2 通道 + 从模式 + 主模式）'
+    : d + '：单通道 · 无从模式 / MMS / CH2（硬件不存在）';
+  $$('#sceneList .sbtn').forEach((b,i)=>{
+    const blocked = d !== 'TIM15' && isV15Scene(i);
+    b.classList.toggle('dim', blocked);
+    b.title = blocked ? d + ' 无此功能' : '';
+  });
+  if(d !== 'TIM15' && isV15Scene(S.scene)) selectScene(0);
+  renderRegs();
+}
+
+function updatePlayBtn(){
+  $('#btnPlay').textContent = S.playing ? '暂停' : '播放';
+  $('#btnPlay').classList.toggle('on', S.playing);
+}
+function nextStep(){
+  const steps = sc().steps;
+  if(S.step < steps.length-1) gotoStep(S.step+1, false);
+  else { S.playing = false; updatePlayBtn(); }
+}
+function prevStep(){
+  S.playing = false; updatePlayBtn();
+  gotoStep(S.step-1, true);
+}
+
+/* 状态栏 */
+let lastStat = 0;
+function updateStat(){
+  const now = performance.now();
+  if(now - lastStat < 120) return;
+  lastStat = now;
+  const c = S.cfg, r = S.rt;
+  $('#statRow').innerHTML =
+    '<span>CNT <b>'+r.cnt+'</b></span>'+
+    '<span>PSC <b>'+c.psc+'</b></span>'+
+    '<span>ARR <b>'+c.arr+'</b></span>'+
+    '<span>RCR <b>'+c.rcr+'</b></span>'+
+    '<span>CCR1 <b>'+(c.cc1s==='in'?r.ccr1Cap:c.ccr1)+'</b></span>'+
+    '<span>REP <b>'+r.rep+'</b></span>'+
+    '<span class="f '+(r.uif?'on':'')+'">UIF</span>'+
+    '<span class="f '+(r.cc1if?'on':'')+'">CC1IF</span>'+
+    '<span class="f '+(r.bif?'warn':'')+'">BIF</span>'+
+    '<span class="f '+(r.moe?'on':'warn')+'">MOE</span>'+
+    (c.sms !== 'off' ? '<span class="f '+(r.trgi?'on':'')+'">TRGI</span>' : '');
+}
+
+function openDrawer(open){
+  const d = $('#drawer');
+  d.classList.toggle('open', open !== undefined ? open : !d.classList.contains('open'));
+  $('#drawerToggle').textContent = d.classList.contains('open') ? '收起' : '展开';
+  if(d.classList.contains('open')) setTimeout(fitCanvas, 60);
+}
+
+function init(){
+  resetRuntime();
+  const gc = $('#btnGlossJump .mini');
+  if(gc) gc.textContent = '(' + TERMS.length + ')';
+  /* 场景按钮 */
+  const list = $('#sceneList');
+  list.innerHTML = SCENES.map((s,i)=>
+    '<button class="sbtn'+(i===0?' on':'')+'" data-i="'+i+'">'+s.name+'</button>'
+  ).join('');
+  $$('#sceneList .sbtn').forEach(b=>{
+    b.addEventListener('click', ()=> selectScene(+b.dataset.i));
+  });
+
+  renderFilters();
+  renderGlossary();
+  renderDelivery();
+  bindDiagram();
+  fitCanvas();
+
+  /* 设备切换 */
+  $$('.btn.dev').forEach(b=> b.addEventListener('click', ()=> setDevice(b.dataset.dev)));
+  /* 聚焦 */
+  $$('.btn[data-focus]').forEach(b=> b.addEventListener('click', ()=>{
+    const f = b.dataset.focus;
+    $$('.btn[data-focus]').forEach(x=> x.classList.toggle('on', x===b));
+    if(f === 'all'){
+      $('#bdiag').classList.remove('focus');
+      $$('#bdiag .sig, #bdiag .mod').forEach(el=> el.classList.remove('hot','flow'));
+      return;
+    }
+    const map = {
+      clk:['clk'], trig:['trig','evt'], out:['out'], irq:['irq','dma']
+    };
+    const types = map[f] || [];
+    $$('#bdiag .sig, #bdiag .mod').forEach(el=>{
+      const term = TERMS.find(t=>t.id===el.dataset.t);
+      const on = term && types.indexOf(term.t) >= 0;
+      el.classList.toggle('hot', !!on);
+      el.classList.toggle('flow', !!on && el.classList.contains('sig'));
+    });
+    $('#bdiag').classList.add('focus');
+  }));
+
+  /* 步骤控制 */
+  $('#btnNext').addEventListener('click', ()=>{ S.playing=false; updatePlayBtn(); nextStep(); });
+  $('#btnPrev').addEventListener('click', prevStep);
+  $('#btnPlay').addEventListener('click', ()=>{
+    S.playing = !S.playing; updatePlayBtn();
+    if(S.playing && S.step >= sc().steps.length-1) gotoStep(0, true);
+  });
+  $('#btnReset').addEventListener('click', ()=>{
+    S.playing=false; updatePlayBtn(); gotoStep(0, true);
+  });
+  $('#speed').addEventListener('input', e=>{ S.speed = +e.target.value; });
+  $('#btnTrig').addEventListener('click', ()=>{
+    S.rt.inject = 3;
+    $('#btnTrig').classList.add('on');
+    setTimeout(()=> $('#btnTrig').classList.remove('on'), 320);
+  });
+
+  /* 波形图例 */
+  $('#waveLegend').innerHTML = LANES.map(l=>'<span data-k="'+l.k+'"><i style="background:'+l.color+'"></i>'+l.label+'</span>').join('');
+  $$('#waveLegend span').forEach(s=>{
+    s.addEventListener('click', ()=>{ s.classList.toggle('off'); });
+  });
+
+  /* 抽屉 */
+  $$('.dtab').forEach(b=> b.addEventListener('click', ()=>{
+    $$('.dtab').forEach(x=> x.classList.toggle('on', x===b));
+    $$('.pane').forEach(p=> p.classList.remove('on'));
+    $('#pane-'+b.dataset.tab).classList.add('on');
+    openDrawer(true);
+    if(b.dataset.tab === 'regs') renderRegs();
+    if(b.dataset.tab === 'code') renderCode();
+    setTimeout(fitCanvas, 80);
+  }));
+  $('#drawerToggle').addEventListener('click', ()=> openDrawer());
+  $('#btnGlossJump').addEventListener('click', ()=>{
+    $$('.dtab').forEach(x=> x.classList.toggle('on', x.dataset.tab === 'gloss'));
+    $$('.pane').forEach(p=> p.classList.remove('on'));
+    $('#pane-gloss').classList.add('on');
+    openDrawer(true);
+    $('#gq').focus();
+  });
+  $('#gq').addEventListener('input', renderGlossary);
+
+  /* 寄存器位域点击 */
+  $('#regWrap').addEventListener('click', e=>{
+    const f = e.target.closest('.fld');
+    if(!f) return;
+    const reg = REGS.find(r=>r.name === f.dataset.reg);
+    const fld = reg && reg.fields.find(x=>x.n === f.dataset.fld);
+    if(!fld) return;
+    const fake = {
+      a: reg.name + '.' + fld.n, en: reg.name + ' bit[' + fld.b[1] + ':' + fld.b[0] + ']',
+      zh: fld.d, t:'bit', from: reg.name + '（' + reg.off + '）', to:'见场景说明',
+      u: fld.d + '。该位域的修改在对应影子/预装载机制下可能延后到 UEV 生效。',
+      n:'RM0456 p.2388+'
+    };
+    showTip(fake, e.clientX, e.clientY);
+    clearTimeout(window.__tipT);
+    window.__tipT = setTimeout(hideTip, 3200);
+  });
+
+  /* 键盘 */
+  document.addEventListener('keydown', e=>{
+    if(e.target.tagName === 'INPUT') return;
+    if(e.key === 'ArrowRight'){ S.playing=false; updatePlayBtn(); nextStep(); }
+    if(e.key === 'ArrowLeft'){ prevStep(); }
+    if(e.code === 'Space'){ e.preventDefault(); $('#btnPlay').click(); }
+    if(e.key === 'Escape'){ $('#bdiag').classList.remove('focus'); hideTip(); }
+  });
+
+  window.addEventListener('resize', ()=>{ fitCanvas(); drawWave(); });
+
+  selectScene(0);
+  updatePlayBtn();
+  updateStat();
+  requestAnimationFrame(loop);
+}
+
+let __last = 0;
+function loop(ts){
+  if(!__last) __last = ts;
+  const dt = ts - __last;
+  __last = ts;
+  if(S.playing){
+    const n = S.speed;
+    runTicks(n);
+    S.stepTicks += n;
+    if(S.stepTicks > 260) nextStep();
+  }
+  drawWave();
+  updateStat();
+  requestAnimationFrame(loop);
+}
+
+let __inited = false;
+function boot(){
+  if(__inited) return;
+  __inited = true;
+  init();
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+</script>
+</body>
+</html>
