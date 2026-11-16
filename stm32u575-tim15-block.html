@@ -593,6 +593,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <button class="btn" data-trg="0">低</button>
         <button class="btn" id="btnTrig">脉冲</button>
         <button class="btn" id="btnTi1" title="仅输入捕获场景有效">TI1 边沿</button>
+        <button class="btn" id="btnClrFlag" title="软件写 0 清除 UIF/CC1IF/CC2IF/BIF">清标志</button>
       </div>
       <div class="stepctl" style="margin-top:4px">
         <label>播放速度<input type="range" id="speed" min="1" max="5" value="2"><span class="mini" id="speedVal">10 计数/秒</span></label>
@@ -602,6 +603,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
     <div class="waves">
       <canvas id="wave"></canvas>
       <div class="wlegend" id="waveLegend"></div>
+      <div class="mini" style="padding:0 2px 5px;color:#5c7284;line-height:1.5">UIF / CC1IF / BIF 是保持型标志位：硬件置 1 后不会自动清零，必须软件写 0；点“清标志”可模拟清零。</div>
       <button class="btn" id="btnSigNote" style="width:100%;margin-bottom:6px">本场景信号说明（每个波形的产生条件）</button>
     </div>
     <div class="statrow" id="statRow"></div>
@@ -697,14 +699,14 @@ const TERMS = [
 {id:'tim_ocref_clr',a:'tim_ocref_clr[7:0]',en:'OCREF clear input',zh:'OCREF 清除输入',t:'in',from:'比较器输出等（由 AF2.OCRSEL 选择）',to:'输出控制',u:'逐周期限流：一旦比较器翻转，立即把当前 PWM 周期剩余部分拉低，不等下一个周期。',n:'RM0456 p.2376'},
 {id:'tim_ocref_clr_int',a:'tim_ocref_clr_int',en:'Internal OCREF clear',zh:'内部 OCREF 清除',t:'evt',from:'OCREF clear 选择/滤波',to:'输出控制',u:'tim_ocref_clr 经过选择与滤波后的内部版本。',n:'RM0456 p.2376'},
 {id:'UEV',a:'UEV',en:'Update event',zh:'更新事件',t:'evt',from:'计数器溢出/下溢、EGR.UG、从模式复位',to:'影子寄存器更新、重复计数器、UIF、TRGO(MMS=010)、DMA',u:'“提交时刻”：PSC/ARR/CCR 的预装载值在 UEV 搬运到影子寄存器，保证波形不撕裂。',n:'RM0456 p.2352'},
-{id:'UIF',a:'UIF',en:'Update interrupt flag',zh:'更新中断标志',t:'irq',from:'SR 寄存器 bit0',to:'IRQ interface → NVIC（UIE=1 时）',u:'每个更新事件置 1；写 0 清除。中断服务里常用来做周期任务。',n:'RM0456 p.2394'},
-{id:'CC1IF',a:'CC1IF',en:'Capture/compare 1 interrupt flag',zh:'捕获/比较 1 中断标志',t:'irq',from:'SR bit1（由内部 CC1I 事件置位）',to:'NVIC / DMA（CC1IE / CC1DE）',u:'捕获到值时置位；输出模式下比较匹配时置位。它是“标志”，不是图上的 CC1I 事件线。',n:'RM0456 p.2394'},
-{id:'CC2IF',a:'CC2IF',en:'Capture/compare 2 interrupt flag',zh:'捕获/比较 2 中断标志',t:'irq',from:'SR bit2（由内部 CC2I 事件置位）',to:'NVIC / DMA',u:'第二通道事件标志；仅 TIM15。与 CC2I 事件线不是同一个信号。',n:'RM0456 p.2394',d:'15'},
+{id:'UIF',a:'UIF',en:'Update interrupt flag',zh:'更新中断标志',t:'irq',from:'SR 寄存器 bit0',to:'IRQ interface → NVIC（UIE=1 时）',u:'每个更新事件置 1；硬件只置位、不会自动清零，必须软件写 0。中断服务里常用来做周期任务。',n:'RM0456 p.2394'},
+{id:'CC1IF',a:'CC1IF',en:'Capture/compare 1 interrupt flag',zh:'捕获/比较 1 中断标志',t:'irq',from:'SR bit1（由内部 CC1I 事件置位）',to:'NVIC / DMA（CC1IE / CC1DE）',u:'捕获到值时置位；输出模式下比较匹配时置位。硬件只置位、不会自动清零，软件写 0 才清除；它是“标志”，不是图上的 CC1I 事件线。',n:'RM0456 p.2394'},
+{id:'CC2IF',a:'CC2IF',en:'Capture/compare 2 interrupt flag',zh:'捕获/比较 2 中断标志',t:'irq',from:'SR bit2（由内部 CC2I 事件置位）',to:'NVIC / DMA',u:'第二通道事件标志；硬件只置位、软件写 0 清除。仅 TIM15，与 CC2I 事件线不是同一个信号。',n:'RM0456 p.2394',d:'15'},
 {id:'CC1I',a:'CC1I',en:'Capture/compare 1 event',zh:'捕获/比较 1 事件',t:'evt',from:'CNT 与 CCR1 比较匹配，或捕获边沿',to:'Trigger controller（MMS=011 比较脉冲）',u:'内部事件脉冲：比较匹配/捕获发生时产生，送触发控制器；MMS=011 时由它在 tim_trgo 上发出一个正脉冲，同时置起 CC1IF。',n:'图 675 / RM0456 p.2390'},
 {id:'CC2I',a:'CC2I',en:'Capture/compare 2 event',zh:'捕获/比较 2 事件',t:'evt',from:'CNT 与 CCR2 比较匹配，或捕获边沿',to:'Trigger controller',u:'第二通道的内部事件，作用同 CC1I；仅 TIM15。',n:'图 675 / RM0456 p.2390',d:'15'},
-{id:'BIF',a:'BIF',en:'Break interrupt flag',zh:'刹车中断标志',t:'irq',from:'SR bit7',to:'NVIC（BIE=1）',u:'刹车事件发生即置位，用于故障记录与恢复判断。',n:'RM0456 p.2394'},
+{id:'BIF',a:'BIF',en:'Break interrupt flag',zh:'刹车中断标志',t:'irq',from:'SR bit7',to:'NVIC（BIE=1）',u:'刹车事件发生即置位，用于故障记录与恢复判断；硬件只置位、软件写 0 清除。',n:'RM0456 p.2394'},
 {id:'SBIF',a:'SBIF',en:'System break interrupt flag',zh:'系统刹车中断标志',t:'irq',from:'Break circuitry（图中画出）',to:'中断逻辑',u:'图 675 中出现的系统刹车标志；注意 TIM15_SR 的 bit15:11 为保留，未定义该位，实际以 BIF 反映刹车。',n:'RM0456 p.2394',d:'15'},
-{id:'CC1OF',a:'CC1OF',en:'Capture/compare 1 over-capture flag',zh:'捕获 1 溢出标志',t:'bit',from:'SR bit9',to:'软件读取',u:'上一次捕获值还没被读走又发生新捕获时置位，提示数据丢失。',n:'RM0456 p.2394'},
+{id:'CC1OF',a:'CC1OF',en:'Capture/compare 1 over-capture flag',zh:'捕获 1 溢出标志',t:'bit',from:'SR bit9',to:'软件读取',u:'上一次捕获值还没被读走又发生新捕获时置位，提示数据丢失；硬件只置位、软件写 0 清除。',n:'RM0456 p.2394'},
 {id:'tim_it',a:'tim_it',en:'Timer interrupt request',zh:'全局中断请求',t:'irq',from:'IRQ interface（UIF/CC1IF/CC2IF/BIF 等汇总）',to:'NVIC 的 TIMx 中断线',u:'所有使能的中断源在 IRQ interface 里 OR 成一根 tim_it，进 NVIC 后由软件分辨标志。',n:'RM0456 p.2344'},
 {id:'tim_cc1_dma',a:'tim_cc1_dma',en:'CC1 DMA request',zh:'捕获/比较 1 DMA 请求',t:'dma',from:'DMA interface（CC1DE）',to:'DMAMUX → GPDMA/LPDMA 通道',u:'捕获值自动搬进内存，适合高速测频不占 CPU。',n:'RM0456 p.2386'},
 {id:'tim_upd_dma',a:'tim_upd_dma',en:'Update DMA request',zh:'更新 DMA 请求',t:'dma',from:'DMA interface（UDE）',to:'DMAMUX → GPDMA/LPDMA',u:'周期性触发 DMA，搬运缓冲区或刷新 CCR（DMA burst）。',n:'RM0456 p.2386'},
@@ -1168,8 +1170,8 @@ function oneTick(){
   S.samples.push({
     cnt:r.cnt, arr:c.arr, ccr1:c.ccr1, ccr2:c.ccr2,
     oc1:r.oc1, oc1n:r.oc1n, oc2:r.oc2, trgi:r.trgi,
-    uif:r.uifPulse>0?1:0, cc1if:r.cc1Pulse>0?1:0,
-    bif:r.bifPulse>0?1:0, trgo:r.trgo
+    uif:r.uif?1:0, cc1if:r.cc1if?1:0,
+    bif:r.bif?1:0, trgo:r.trgo
   });
   if(S.samples.length > 480) S.samples.shift();
 }
@@ -1706,18 +1708,18 @@ function renderSignalNotes(){
   rows.push(['UIF', '更新中断标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.rcr > 0
-          ? `【标志位 0/1】每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。`
-          : '【标志位 0/1】每次 UEV 置 1；UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。它不是引脚，波形画成短脉冲只为可视化。')]);
+          ? `【标志位 0/1】每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。置 1 后<b>保持</b>，硬件不会自动清零，必须软件写 0；波形显示为保持电平。`
+          : '【标志位 0/1】每次 UEV 置 1；置 1 后<b>保持</b>，硬件不会自动清零，必须软件写 0（rc_w0）。UIE=1 才进 NVIC；波形显示为保持电平，可点“清标志”清零。')]);
 
   rows.push(['CC1IF', '捕获/比较 1 标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.cc1s === 'in'
-          ? '【标志位 0/1】TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位）；若上次值未读又发生捕获，还会置 CC1OF。'
-          : '【标志位 0/1】CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位）；若 CC1IE=1 则进 NVIC。')]);
+          ? '【标志位 0/1】TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位），置 1 后<b>保持</b>，需软件写 0 清除；若没清就再次捕获，还会置 CC1OF。'
+          : '【标志位 0/1】CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位），置 1 后<b>保持</b>，需软件写 0 清除；若 CC1IE=1 则进 NVIC。')]);
 
   const bifOn = !!c.bke;
   rows.push(['BIF', '刹车中断标志', bifOn ? ON : OFF,
-    bifOn ? '【标志位 0/1】BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；AOE=1 时下一个 UEV 自动恢复 MOE。'
+    bifOn ? '【标志位 0/1】BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；置 1 后<b>保持</b>，需软件写 0 清除。AOE=1 时下一个 UEV 自动恢复 MOE。'
           : 'BKE=0：本场景不产生刹车事件']);
 
   const m = MMS_INFO[c.mms] || MMS_INFO.update;
@@ -1968,6 +1970,18 @@ function forceTi1Edge(){
   S.rt.ti1Force = 2;
   manualAdvance(1);
 }
+function clearFlags(){
+  /* 模拟软件对标志位写 0（rc_w0）；硬件本身不会自动清除 */
+  S.rt.uif = 0; S.rt.cc1if = 0; S.rt.cc2if = 0; S.rt.bif = 0;
+  S.rt.uifPulse = 0; S.rt.cc1Pulse = 0; S.rt.bifPulse = 0;
+  if(S.samples.length){
+    const s = Object.assign({}, S.samples[S.samples.length - 1]);
+    s.uif = 0; s.cc1if = 0; s.bif = 0;
+    S.samples.push(s);
+  }
+  S.playing = false; updatePlayBtn();
+  drawWave(); lastStat = 0; updateStat(); renderSignalNotes();
+}
 
 function openDrawer(open){
   const d = $('#drawer');
@@ -2051,6 +2065,7 @@ function init(){
   $('#btnTick').addEventListener('click', ()=> manualAdvance(1));
   $('#btnTickCnt').addEventListener('click', manualCount);
   $('#btnTi1').addEventListener('click', forceTi1Edge);
+  $('#btnClrFlag').addEventListener('click', clearFlags);
   $$('[data-trg]').forEach(b=> b.addEventListener('click', ()=> setTrgiMode(b.dataset.trg)));
   $('#btnTrig').addEventListener('click', ()=>{
     S.rt.inject = 3;
