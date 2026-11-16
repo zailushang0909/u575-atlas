@@ -583,8 +583,19 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <button class="btn" id="btnPlay">播放</button>
         <button class="btn" id="btnNext">下一步</button>
         <button class="btn" id="btnReset">复位</button>
-        <label>速度<input type="range" id="speed" min="1" max="8" value="2"></label>
-        <button class="btn" id="btnTrig">注入 TRGI 脉冲</button>
+      </div>
+      <div class="stepctl" style="margin-top:4px">
+        <button class="btn" id="btnTick" title="前进 1 个 tim_ker_ck">单步时钟</button>
+        <button class="btn" id="btnTickCnt" title="一直走到 CNT 发生变化">单步计数</button>
+        <span class="mini" style="color:var(--dim)">TRGI</span>
+        <button class="btn on" data-trg="auto">自动</button>
+        <button class="btn" data-trg="1">高</button>
+        <button class="btn" data-trg="0">低</button>
+        <button class="btn" id="btnTrig">脉冲</button>
+        <button class="btn" id="btnTi1" title="仅输入捕获场景有效">TI1 边沿</button>
+      </div>
+      <div class="stepctl" style="margin-top:4px">
+        <label>播放速度<input type="range" id="speed" min="1" max="5" value="2"><span class="mini" id="speedVal">10 计数/秒</span></label>
       </div>
       <div class="hint" id="stepNote"></div>
     </div>
@@ -1042,8 +1053,10 @@ const S = {
   cfg: {...CFG0},
   rt: {},
   scene:0, step:0, playing:false, speed:2, device:'TIM15',
-  samples:[], focus:'all', hiRegs:[], stepTicks:0
+  samples:[], focus:'all', hiRegs:[], stepTicks:0, stepMs:0,
+  trgiManual:null
 };
+const RATES = [0, 5, 10, 20, 40, 80];   /* 速度 1–5 对应的 tim_ker_ck / 秒 */
 window.__tim = S;
 
 const $ = (s,r)=> (r||document).querySelector(s);
@@ -1056,7 +1069,7 @@ function resetRuntime(){
     uif:0, cc1if:0, cc2if:0, bif:0,
     uifPulse:0, cc1Pulse:0, bifPulse:0, uevPulse:0, ugPulse:0,
     moe:c.moe, oc1:0, oc1n:0, oc2:0, oc1ref:0, trgo:0,
-    trgi:0, trgiPrev:0, ti1Prev:0, inject:0, manual:0,
+    trgi:0, trgiPrev:0, ti1Prev:0, inject:0, manual:0, ti1Force:0,
     ccr1Cap:0, ccr2Cap:0,
     refPrev:0, pend1:0, pend1n:0
   };
@@ -1080,7 +1093,9 @@ function trigLevel(){
   return 0;
 }
 function ti1Level(){
-  return (S.rt.tick % 20) < 10 ? 1 : 0;
+  const r = S.rt;
+  if(r.ti1Force > 0){ r.ti1Force--; return 1; }
+  return (r.tick % 20) < 10 ? 1 : 0;
 }
 
 /* ---------- 核心单步 ---------- */
@@ -1258,9 +1273,16 @@ function gotoStep(n, fresh){
   }
   S.step = n;
   S.stepTicks = 0;
+  S.stepMs = 0;
+  if(S.trgiManual !== null){
+    S.cfg.trigiMode = 'manual';
+    S.rt.manual = S.trgiManual ? 1 : 0;
+  }
   const st = steps[n];
   if(S.cfg.mms === 'reset') S.rt.ugPulse = 4;
   S.hiRegs = (st.regs || []).slice();
+  const ti1Btn = $('#btnTi1');
+  if(ti1Btn) ti1Btn.disabled = (S.cfg.cc1s !== 'in');
   setHighlight(st.hi || []);
   renderStep();
   renderRegs();
@@ -1272,6 +1294,8 @@ function selectScene(i){
     return;
   }
   S.scene = i; S.playing = false; updatePlayBtn();
+  S.trgiManual = null;
+  $$('[data-trg]').forEach(b=> b.classList.toggle('on', b.dataset.trg === 'auto'));
   $$('#sceneList .sbtn').forEach((b,k)=> b.classList.toggle('on', k===i));
   const s = sc();
   $('#sceneGroup').textContent = s.grp;
@@ -1777,6 +1801,52 @@ function applyZoom(z){
   $$('.dgm-head [data-zoom]').forEach(b=> b.classList.toggle('on', b.dataset.zoom === String(z)));
 }
 
+/* ---------- 手动触发 / 慢速播放 ---------- */
+function updateSpeedLabel(){
+  const el = $('#speedVal');
+  if(el) el.textContent = (RATES[S.speed] || 10) + ' 计数/秒';
+}
+function manualAdvance(n){
+  S.playing = false; updatePlayBtn();
+  runTicks(n);
+  drawWave(); lastStat = 0; updateStat();
+  if($('#drawer').classList.contains('open') && $('#pane-regs').classList.contains('on')) renderRegs();
+}
+function manualCount(){
+  const c = S.cfg, r = S.rt;
+  let counting = c.cen;
+  if(c.sms === 'gated' || c.sms === 'gatedreset') counting = c.cen && r.trgi;
+  if(c.sms === 'extclk'){
+    counting = !(c.trigiMode === 'manual' && !r.manual);   /* 手动为低时没有边沿 */
+  }
+  if(!counting){ manualAdvance(1); return; }               /* 未在计数：只走 1 拍，避免空转 */
+  const c0 = r.cnt;
+  const max = (c.sms === 'extclk') ? 30 : ((c.psc || 0) + 2);
+  let n = 0;
+  do { oneTick(); n++; } while(r.cnt === c0 && n < max);
+  S.playing = false; updatePlayBtn();
+  drawWave(); lastStat = 0; updateStat();
+}
+function setTrgiMode(m){
+  if(m === 'auto'){
+    S.trgiManual = null;
+    S.cfg.trigiMode = (sc().trigi === 'none') ? 'manual' : 'square';
+    S.rt.manual = 0;
+  }else{
+    S.trgiManual = (m === '1');
+    S.cfg.trigiMode = 'manual';
+    S.rt.manual = S.trgiManual ? 1 : 0;
+  }
+  $$('[data-trg]').forEach(b=> b.classList.toggle('on', b.dataset.trg === m));
+  drawWave(); lastStat = 0; updateStat();
+}
+function forceTi1Edge(){
+  if(S.cfg.cc1s !== 'in') return;
+  S.rt.ti1Prev = 0;       /* 造一个上升沿 */
+  S.rt.ti1Force = 2;
+  manualAdvance(1);
+}
+
 function openDrawer(open){
   const d = $('#drawer');
   d.classList.toggle('open', open !== undefined ? open : !d.classList.contains('open'));
@@ -1846,12 +1916,20 @@ function init(){
   $('#btnPrev').addEventListener('click', prevStep);
   $('#btnPlay').addEventListener('click', ()=>{
     S.playing = !S.playing; updatePlayBtn();
-    if(S.playing && S.step >= sc().steps.length-1) gotoStep(0, true);
+    if(S.playing){
+      S.stepMs = 0;
+      if(S.step >= sc().steps.length-1) gotoStep(0, true);
+    }
   });
   $('#btnReset').addEventListener('click', ()=>{
     S.playing=false; updatePlayBtn(); gotoStep(0, true);
   });
-  $('#speed').addEventListener('input', e=>{ S.speed = +e.target.value; });
+  $('#speed').addEventListener('input', e=>{ S.speed = +e.target.value; updateSpeedLabel(); });
+  updateSpeedLabel();
+  $('#btnTick').addEventListener('click', ()=> manualAdvance(1));
+  $('#btnTickCnt').addEventListener('click', manualCount);
+  $('#btnTi1').addEventListener('click', forceTi1Edge);
+  $$('[data-trg]').forEach(b=> b.addEventListener('click', ()=> setTrgiMode(b.dataset.trg)));
   $('#btnTrig').addEventListener('click', ()=>{
     S.rt.inject = 3;
     $('#btnTrig').classList.add('on');
@@ -1920,16 +1998,20 @@ function init(){
   requestAnimationFrame(loop);
 }
 
-let __last = 0;
+let __last = 0, __acc = 0;
 function loop(ts){
   if(!__last) __last = ts;
-  const dt = ts - __last;
+  const dt = Math.min(80, ts - __last);
   __last = ts;
   if(S.playing){
-    const n = S.speed;
-    runTicks(n);
-    S.stepTicks += n;
-    if(S.stepTicks > 260) nextStep();
+    const rate = RATES[S.speed] || 10;      /* 计数/秒 */
+    __acc += rate * dt / 1000;
+    const n = Math.floor(__acc);
+    if(n > 0){ __acc -= n; runTicks(n); }
+    S.stepMs += dt;
+    if(S.stepMs > 6000) nextStep();          /* 每步停留 6 秒，便于阅读 */
+  }else{
+    __acc = 0;
   }
   drawWave();
   updateStat();
