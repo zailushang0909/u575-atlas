@@ -327,10 +327,10 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
           <text x="930" y="70" text-anchor="middle" class="msub">MMS → tim_trgo</text>
         </g>
         <g class="mod ctl v15only" data-t="slave_controller" id="m_slave">
-          <rect x="860" y="108" width="140" height="88"/>
-          <text x="930" y="130" text-anchor="middle" class="mname">Slave mode</text>
-          <text x="930" y="143" text-anchor="middle" class="mname">controller</text>
-          <text x="930" y="160" text-anchor="middle" class="msub">SMS[3:0] / TS / MSM</text>
+          <rect x="860" y="112" width="140" height="92"/>
+          <text x="930" y="136" text-anchor="middle" class="mname">Slave mode</text>
+          <text x="930" y="149" text-anchor="middle" class="mname">controller</text>
+          <text x="930" y="166" text-anchor="middle" class="msub">SMS[3:0] / TS / MSM</text>
         </g>
 
         <!-- ============ 时基 ============ -->
@@ -396,12 +396,19 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         </g>
 
         <!-- ============ 触发源选择 ============ -->
-        <g class="mod ctl v15only" data-t="TS" id="m_ts">
-          <rect x="540" y="110" width="90" height="86"/>
-          <text x="585" y="138" text-anchor="middle" class="mname">TS[4:0]</text>
-          <text x="585" y="151" text-anchor="middle" class="msub">触发源选择</text>
-          <text x="585" y="170" text-anchor="middle" class="msub">ITR / TI1F_ED</text>
-          <text x="585" y="182" text-anchor="middle" class="msub">TI1FP1 / TI2FP2</text>
+        <g class="mod ctl v15only" data-t="tim_trc" id="m_trcmux">
+          <rect x="500" y="110" width="60" height="70"/>
+          <text x="530" y="132" text-anchor="middle" class="mname">TRC 选择</text>
+          <text x="530" y="147" text-anchor="middle" class="msub">ITR</text>
+          <text x="530" y="160" text-anchor="middle" class="msub">TI1F_ED</text>
+        </g>
+        <g class="mod ctl v15only" data-t="tim_trgi" id="m_ts">
+          <rect x="610" y="105" width="60" height="85"/>
+          <text x="640" y="122" text-anchor="middle" class="mname">TRGI</text>
+          <text x="640" y="136" text-anchor="middle" class="msub">TS[4:0]</text>
+          <text x="640" y="152" text-anchor="middle" class="msub">TRC</text>
+          <text x="640" y="166" text-anchor="middle" class="msub">TI1FP1</text>
+          <text x="640" y="180" text-anchor="middle" class="msub">TI2FP2</text>
         </g>
 
         <!-- ============ 输出 ============ -->
@@ -438,24 +445,30 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <!-- ============ 连线 ============ -->
         <!-- 时钟 -->
         <path class="sig clk" data-t="tim_ker_ck" d="M180,44 H360 V322 H560"/>
+        <path class="sig clk" data-t="tim_ker_ck" d="M360,240 H370" stroke-dasharray="2 2"/>
+        <path class="sig clk" data-t="tim_ker_ck" d="M360,322 V360 H370" stroke-dasharray="2 2"/>
+        <text class="lab" x="318" y="232">t_DTS</text>
         <text class="lab" x="490" y="316">tim_psc_ck</text>
         <path class="sig clk" data-t="tim_cnt_ck" d="M625,322 H650"/>
 
         <!-- 触发输入 -->
-        <path class="sig trig v15only" data-t="tim_itr" d="M180,84 H520 V130 H540"/>
-        <path class="sig evt v15only" data-t="tim_ti1f_ed" d="M470,246 H490 V150 H540"/>
-        <path class="sig evt v15only" data-t="tim_ti1fp1" d="M470,262 H502 V170 H540"/>
-        <path class="sig evt v15only" data-t="tim_ti2fp2" d="M470,374 H486 V190 H540"/>
-        <path class="sig trig v15only" data-t="tim_trgi" d="M630,153 H860"/>
-        <path class="sig trig v15only" data-t="tim_trc" d="M930,96 V108"/>
+        <path class="sig trig v15only" data-t="tim_itr" d="M180,84 H470 V130 H500"/>
+        <path class="sig evt v15only" data-t="tim_ti1f_ed" d="M466,246 H482 V150 H500"/>
+        <path class="sig evt v15only" data-t="tim_ti1fp1" d="M466,262 H492 V200 H600 V145 H610"/>
+        <path class="sig evt v15only" data-t="tim_ti2fp2" d="M466,374 H486 V185 H610"/>
+        <path class="sig trig v15only" data-t="tim_trc" d="M560,145 H585 V125 H610"/>
+        <path class="sig trig v15only" data-t="tim_trgi" d="M670,165 H860"/>
+        <path class="sig trig v15only" data-t="tim_trgi" d="M740,165 V44 H860"/>
+        <circle cx="740" cy="165" r="2.2" fill="#a86b8f"/>
         <path class="sig trig v15only" data-t="tim_trgo" d="M1000,60 H1210"/>
 
         <text class="lab v15only" x="430" y="80">tim_itr</text>
         <text class="lab v15only" x="486" y="146" text-anchor="end">ti1f_ed</text>
-        <text class="lab v15only" x="536" y="166" text-anchor="end">ti1fp1</text>
-        <text class="lab v15only" x="482" y="186" text-anchor="end">ti2fp2</text>
-        <text class="lab v15only" x="690" y="147">tim_trgi</text>
-        <text class="lab v15only" x="936" y="104">tim_trc</text>
+        <text class="lab v15only" x="596" y="158" text-anchor="end">ti1fp1</text>
+        <text class="lab v15only" x="596" y="213" text-anchor="end">ti2fp2</text>
+        <text class="lab v15only" x="590" y="138">TRC</text>
+        <text class="lab v15only" x="676" y="160">tim_trgi</text>
+        <text class="lab v15only" x="706" y="40">TRG</text>
         <text class="lab v15only" x="1010" y="54">tim_trgo</text>
 
         <!-- 输入捕获 -->
@@ -468,7 +481,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <path class="sig evt" data-t="tim_ic1" d="M555,373 H575 V382 H600"/>
         <path class="sig evt v15only" data-t="tim_ic2" d="M470,391 H486 V459 H495"/>
         <path class="sig evt v15only" data-t="tim_ic2" d="M555,459 H575 V472 H600"/>
-        <text class="lab" x="558" y="350">tim_ic1</text>
+        <text class="lab" x="562" y="354">tim_ic1</text>
         <text class="lab v15only" x="558" y="438">tim_ic2</text>
 
         <!-- CNT 比较 -->
@@ -482,12 +495,12 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <path class="sig evt" data-t="UEV" d="M770,286 V214"/>
         <path class="sig evt" data-t="UEV" d="M770,258 H755"/>
         <path class="sig evt" data-t="UEV" d="M770,214 H755"/>
-        <text class="lab" x="706" y="281">UEV</text>
+        <text class="lab" x="706" y="284">UEV</text>
 
         <!-- 从模式控制 -->
-        <path class="sig trig v15only" data-t="slave_controller" d="M900,196 V292 H600 V300"/>
+        <path class="sig trig v15only" data-t="slave_controller" d="M900,204 V292 H600 V300"/>
         <path class="sig trig v15only" data-t="slave_controller" d="M700,292 V300"/>
-        <text class="lab v15only" x="912" y="248" transform="rotate(-90 912,248)" text-anchor="middle">Reset / Enable / Up</text>
+        <text class="lab v15only" x="920" y="250" transform="rotate(-90 920,250)" text-anchor="middle">Reset / Enable / Up</text>
 
         <!-- 比较事件送触发器 -->
         <path class="sig evt v15only" data-t="CC1I" d="M760,382 H830 V80 H860"/>
@@ -546,7 +559,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
       <span><i style="background:#7dd3fc"></i>总线</span>
     </div>
     <div class="dgm-foot">
-      说明：本图按 Figure 675 拓扑重绘，信号名与方向已对照 <b>RM0456 Table 571（p.2344）</b>核对；<b>tim_itr[15:0]</b> 是内部触发输入（仅 TIM15），与全局中断 <b>tim_it</b> 不是一回事。TIM16/17 会隐藏从模式、TS、TRGO 与 CH2 相关部分。
+      说明：本图按 Figure 675 拓扑重绘，信号名与方向已对照 <b>RM0456 Table 571（p.2344）</b>核对：<b>ITR/TI1_ED → tim_trc →（TS 选择）→ tim_trgi → 从模式控制器</b>。<b>tim_itr[15:0]</b> 是内部触发输入（仅 TIM15），与全局中断 <b>tim_it</b> 不是一回事。另：CCxS=11 时捕获输入改由 <b>tim_trc</b> 提供（原图为 Prescaler 前的选择器，此处以文字说明代替布线）；三路刹车输入在 Break circuitry 前还有一级选择器；UEV 还会把 CCR1/CCR2 的预装载值搬入影子寄存器，并且是触发控制器 MMS=010 的来源。TIM16/17 会隐藏从模式、TRC/TRGI、TRGO 与 CH2 相关部分。
     </div>
   </section>
 
@@ -642,14 +655,14 @@ const TERMS = [
 {id:'tim_pclk',a:'tim_pclk',en:'Timer APB peripheral clock',zh:'APB 外设时钟',t:'clk',from:'APB1 总线时钟（RCC）',to:'寄存器接口、IRQ interface、DMA interface',u:'CPU 读写 TIMx 寄存器的总线时钟域；与计数时钟分开，便于低功耗时停掉内核时钟仍保留寄存器状态。',n:'RM0456 p.2344'},
 {id:'tim_psc_ck',a:'tim_psc_ck',en:'Prescaler clock',zh:'预分频器输入时钟',t:'clk',from:'tim_ker_ck',to:'PSC 预分频器',u:'PSC 的输入；PSC=0 时等于内核时钟，PSC=n 时为 n+1 分频。',n:'RM0456 p.2344'},
 {id:'tim_cnt_ck',a:'tim_cnt_ck',en:'Counter clock',zh:'计数器时钟',t:'clk',from:'PSC 预分频器',to:'CNT 计数器',u:'CNT 每来一个 tim_cnt_ck 就 +1；它是所有捕获/比较/更新事件的时间基准。',n:'RM0456 p.2344'},
-{id:'tim_itr',a:'tim_itr[15:0]',en:'Internal trigger inputs',zh:'内部触发输入',t:'trig',from:'其它定时器的 TRGO / OC1（ITR0–5、7、8 等）',to:'从模式控制器的 TS 多路选择器',u:'定时器级联：把别的定时器当自己的触发源，实现同步启动、复位、门控、外部时钟。仅 TIM15 有。',n:'表 571 / 574，p.2344–2345',d:'15'},
+{id:'tim_itr',a:'tim_itr[15:0]',en:'Internal trigger inputs',zh:'内部触发输入',t:'trig',from:'其它定时器的 TRGO / OC1（ITR0–5、7、8 等）',to:'TRC 选择器（第一级），再经 TS 选择成 tim_trgi',u:'定时器级联：把别的定时器当自己的触发源，实现同步启动、复位、门控、外部时钟。仅 TIM15 有。',n:'表 571 / 574，p.2344–2345',d:'15'},
 {id:'tim_ti1_in',a:'tim_ti1_in[15:0]',en:'TI1 input',zh:'通道 1 外部输入',t:'in',from:'GPIO 复用（TIMx_CH1）或内部复用',to:'TI1 输入滤波器 + 边沿检测器',u:'输入捕获测频率/占空比、外部时钟、门控、编码器（本系列无编码器接口）等。',n:'RM0456 p.2344'},
 {id:'tim_ti2_in',a:'tim_ti2_in[15:0]',en:'TI2 input',zh:'通道 2 外部输入',t:'in',from:'GPIO 复用（TIMx_CH2）',to:'TI2 输入滤波器 + 边沿检测器',u:'第二路捕获、双沿测量、与 TI1 做 XOR 组合。仅 TIM15 有。',n:'RM0456 p.2344',d:'15'},
-{id:'tim_ti1f_ed',a:'tim_ti1f_ed',en:'TI1 edge detector output',zh:'TI1 边沿检测输出',t:'evt',from:'TI1 边沿检测器',to:'从模式控制器 / 触发选择',u:'把 TI1 的每个有效边沿直接当触发事件，常见于双边沿计数与外部时钟。',n:'RM0456 p.2344'},
-{id:'tim_ti1fp1',a:'tim_ti1fp1',en:'TI1 filtered and prescaled',zh:'滤波并预分频后的 TI1',t:'evt',from:'TI1 滤波器 + IC1 预分频',to:'从模式控制器（TS=00101）',u:'作为 TRGI 的候选源，让外部信号直接控制从模式。',n:'RM0456 p.2345'},
-{id:'tim_ti2fp2',a:'tim_ti2fp2',en:'TI2 filtered and prescaled',zh:'滤波并预分频后的 TI2',t:'evt',from:'TI2 滤波器 + IC2 预分频',to:'从模式控制器（TS=00110）',u:'第二路外部触发源；仅 TIM15。',n:'RM0456 p.2345',d:'15'},
-{id:'tim_trgi',a:'tim_trgi',en:'Trigger input',zh:'触发输入',t:'trig',from:'TS 多路选择器（ITR / TI1FP1 / TI2FP2 / TI1F_ED）',to:'从模式控制器',u:'从模式的所有动作（复位、门控、启动、外部时钟）都由 tim_trgi 驱动。',n:'RM0456 p.2391'},
-{id:'tim_trc',a:'tim_trc',en:'Trigger controller output',zh:'触发控制器输出',t:'trig',from:'Trigger controller',to:'从模式控制器 / 计数控制',u:'内部触发总线，负责把选中的触发事件分发给从模式与计数逻辑。',n:'RM0456 p.2342'},
+{id:'tim_ti1f_ed',a:'tim_ti1f_ed',en:'TI1 edge detector output',zh:'TI1 边沿检测输出',t:'evt',from:'TI1 边沿检测器',to:'TRC 选择器（第一级）',u:'把 TI1 的每个有效边沿直接当触发事件，常见于双边沿计数与外部时钟。',n:'图 675'},
+{id:'tim_ti1fp1',a:'tim_ti1fp1',en:'TI1 filtered and prescaled',zh:'滤波并预分频后的 TI1',t:'evt',from:'TI1 滤波器 + IC1 预分频',to:'TRGI 选择器（TS=00101）',u:'作为 TRGI 的候选源，让外部信号直接控制从模式。',n:'图 675 / RM0456 p.2391'},
+{id:'tim_ti2fp2',a:'tim_ti2fp2',en:'TI2 filtered and prescaled',zh:'滤波并预分频后的 TI2',t:'evt',from:'TI2 滤波器 + IC2 预分频',to:'TRGI 选择器（TS=00110）',u:'第二路外部触发源；仅 TIM15。',n:'图 675 / RM0456 p.2391',d:'15'},
+{id:'tim_trgi',a:'tim_trgi',en:'Trigger input',zh:'触发输入',t:'trig',from:'TRC / TI1FP1 / TI2FP2 经 TS[4:0] 选择',to:'从模式控制器；同时作为 TRG 送触发控制器',u:'从模式的所有动作（复位、门控、启动、外部时钟）都由 tim_trgi 驱动，主模式 MMS=000 的 TRGO 也参考这个触发事件。',n:'图 675 / RM0456 p.2391'},
+{id:'tim_trc',a:'tim_trc',en:'Internal trigger bus (TRC)',zh:'内部触发总线',t:'trig',from:'tim_itr[15:0] / tim_ti1f_ed 经第一级选择',to:'TRGI 选择器；两路捕获通道（CCxS=11）',u:'第一级选择结果：把内部触发线或 TI1 边沿事件汇成 TRC；CCxS=11 时捕获输入也改由 tim_trc 提供。',n:'图 675'},
 {id:'tim_trgo',a:'tim_trgo',en:'Trigger output',zh:'触发输出',t:'trig',from:'主模式控制器（MMS）',to:'其它定时器 ITR、ADC 触发、GPDMA 请求、EXTI',u:'主模式核心：把本定时器的复位/使能/更新/比较事件广播出去，实现级联与同步采样。仅 TIM15。',n:'RM0456 p.2390',d:'15'},
 {id:'tim_ic1',a:'tim_ic1',en:'Input capture 1 signal',zh:'输入捕获 1 信号',t:'evt',from:'TI1 滤波器 → IC1 预分频',to:'Capture/Compare 1 寄存器（锁存 CNT）',u:'边沿到来时把当前 CNT 复制进 CCR1，用于测周期、脉宽、频率。',n:'RM0456 p.2355'},
 {id:'tim_ic2',a:'tim_ic2',en:'Input capture 2 signal',zh:'输入捕获 2 信号',t:'evt',from:'TI2 滤波器 → IC2 预分频',to:'Capture/Compare 2 寄存器',u:'第二路捕获；仅 TIM15。',n:'RM0456 p.2355',d:'15'},
@@ -724,8 +737,8 @@ const TERMS = [
 {id:'opm',a:'单脉冲',en:'One-pulse mode',zh:'单脉冲模式',t:'concept',from:'OPM=1 + 启动条件',to:'一个周期后自动停止',u:'适合精确定时、超声激励、单次脉冲输出；启动可由 CEN 或从模式触发。',n:'RM0456 p.2379'},
 
 /* 模块类术语 */
-{id:'trigger_controller',a:'Trigger controller',en:'Trigger controller',zh:'触发控制器',t:'concept',from:'CC1I/CC2I、UEV、TRC',to:'从模式控制器 / TRGO',u:'把内部事件组织成触发信号；主模式下决定 TRGO 的内容。',n:'图 675'},
-{id:'slave_controller',a:'Slave mode controller',en:'Slave mode controller',zh:'从模式控制器',t:'concept',from:'tim_trgi / SMS / TS',to:'Reset、Enable、Up-count 控制',u:'让本定时器受外部或其它定时器支配：复位、门控、触发启动、外部时钟。TIM16/17 没有这个模块。',n:'图 675',d:'15'},
+{id:'trigger_controller',a:'Trigger controller',en:'Trigger controller',zh:'触发控制器',t:'concept',from:'TRG（触发事件）、CC1I/CC2I、UEV',to:'tim_trgo（MMS 选择输出内容）',u:'把触发事件与比较/更新事件组织成 tim_trgo；MMS=000 时若复位来自触发输入，TRGO 会相对延迟。',n:'图 675 / RM0456 p.2390'},
+{id:'slave_controller',a:'Slave mode controller',en:'Slave mode controller',zh:'从模式控制器',t:'concept',from:'tim_trgi / SMS[3:0] / MSM',to:'Reset, enable, up, count（控制 PSC/CNT）',u:'让本定时器受外部或其它定时器支配：复位、门控、触发启动、外部时钟；MSM=1 时与主定时器完美同步。TIM16/17 没有这个模块。',n:'图 675',d:'15'},
 {id:'irq_if',a:'IRQ interface',en:'Interrupt interface',zh:'中断接口',t:'concept',from:'SR 中各标志 + DIER 使能位',to:'tim_it → NVIC',u:'把多个中断源 OR 成一根全局中断线，降低 NVIC 资源占用。',n:'图 675'},
 {id:'dma_if',a:'DMA interface',en:'DMA interface',zh:'DMA 接口',t:'concept',from:'捕获/更新/触发/换相事件',to:'tim_cc1_dma 等 DMA 请求',u:'把事件变成 DMA 请求，交给 DMAMUX 分配到通道。',n:'图 675'},
 {id:'psc',a:'PSC prescaler',en:'Prescaler',zh:'预分频器',t:'concept',from:'tim_ker_ck',to:'tim_cnt_ck',u:'把内核时钟降到需要的计数频率，分频比 1–65536。',n:'图 675'},
