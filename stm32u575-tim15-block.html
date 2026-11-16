@@ -1445,15 +1445,18 @@ function renderRegs(){
       const fields = document.createElement('div'); fields.className = 'fields';
       reg.fields.forEach(f=>{
         if(!fieldVisible(f, reg)) return;
-        if(f.b[1] < base || f.b[0] > base+15) return;
-        const b0 = Math.max(f.b[0], base), b1 = Math.min(f.b[1], base+15);
+        /* 数据按 ST 手册写法 b:[高位, 低位] */
+        const hiBit = Math.max(f.b[0], f.b[1]);
+        const loBit = Math.min(f.b[0], f.b[1]);
+        if(hiBit < base || loBit > base+15) return;
+        const b0 = Math.max(loBit, base), b1 = Math.min(hiBit, base+15);
         const span = b1 - b0 + 1;
         const d = document.createElement('div');
         const isHi = hi.has(reg.name + '.' + f.n);
         d.className = 'fld' + (isHi ? ' hi' : '');
         d.style.gridColumn = (b0-base+1) + ' / span ' + span;
         d.textContent = f.n;
-        d.title = f.n + '（bit' + (f.b[0] === f.b[1] ? f.b[0] : f.b[1] + ':' + f.b[0]) + '）：' + f.d;
+        d.title = f.n + '（bit' + (hiBit === loBit ? hiBit : hiBit + ':' + loBit) + '）：' + f.d;
         d.dataset.reg = reg.name; d.dataset.fld = f.n;
         const v = f.val ? f.val() : null;
         if(v) d.classList.add('v1');
@@ -1777,8 +1780,9 @@ function init(){
     const reg = REGS.find(r=>r.name === f.dataset.reg);
     const fld = reg && reg.fields.find(x=>x.n === f.dataset.fld);
     if(!fld) return;
+    const fh = Math.max(fld.b[0], fld.b[1]), fl = Math.min(fld.b[0], fld.b[1]);
     const fake = {
-      a: reg.name + '.' + fld.n, en: reg.name + ' bit[' + fld.b[1] + ':' + fld.b[0] + ']',
+      a: reg.name + '.' + fld.n, en: reg.name + ' bit[' + fh + ':' + fl + ']',
       zh: fld.d, t:'bit', from: reg.name + '（' + reg.off + '）', to:'见场景说明',
       u: fld.d + '。该位域的修改在对应影子/预装载机制下可能延后到 UEV 生效。',
       n:'RM0456 p.2388+'
