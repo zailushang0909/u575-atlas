@@ -602,6 +602,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
     <div class="waves">
       <canvas id="wave"></canvas>
       <div class="wlegend" id="waveLegend"></div>
+      <button class="btn" id="btnSigNote" style="width:100%;margin-bottom:6px">本场景信号说明（每个波形的产生条件）</button>
     </div>
     <div class="statrow" id="statRow"></div>
   </aside>
@@ -610,6 +611,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
 <div class="drawer" id="drawer">
   <div class="drawer-tabs">
     <button class="dtab on" data-tab="gloss">术语表 · 信号与缩写</button>
+    <button class="dtab" data-tab="signals">场景信号</button>
     <button class="dtab" data-tab="deliver">信号出货清单</button>
     <button class="dtab" data-tab="regs">寄存器位域</button>
     <button class="dtab" data-tab="code">参考代码</button>
@@ -628,6 +630,10 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <th style="width:120px">缩写 / 符号</th><th style="width:190px">全称</th><th style="width:120px">中文</th>
         <th style="width:74px">类型</th><th style="width:150px">来自</th><th style="width:150px">去往</th><th>使用场景</th>
       </tr></thead><tbody id="gBody"></tbody></table></div>
+    </div>
+    <div class="pane" id="pane-signals">
+      <div class="gbar"><span class="mini">当前场景下每个波形信号的作用、是否有效、产生条件</span><span class="gcount" id="sigScene"></span></div>
+      <div class="gwrap" id="sigWrap"></div>
     </div>
     <div class="pane" id="pane-deliver">
       <div class="gbar"><span class="mini">定时器内部信号 → 片内目的地</span><span class="gcount">点击行可在框图上高亮</span></div>
@@ -1247,6 +1253,10 @@ function runTicks(n){ for(let i=0;i<n;i++) oneTick(); }
 function rebuildCfg(n){
   const base = {...CFG0, ...sc().cfg};
   base.trigiMode = sc().trigi === 'none' ? 'manual' : 'square';
+  /* 非输出类场景关闭通道输出，避免 OC 波形抢戏 */
+  if(['count','capture','sms_reset','sms_gated','sms_trigger','sms_extclk','sms_combo','master','rep','dmaburst','devices'].indexOf(sc().id) >= 0){
+    base.cc1e = 0; base.cc1ne = 0; base.cc2e = 0;
+  }
   for(let i=0;i<=n;i++){
     const st = sc().steps[i];
     if(st && st.cfg) Object.assign(base, st.cfg);
@@ -1315,6 +1325,7 @@ function renderStep(){
     ? st.hi.map(id=>{ const t = TERMS.find(x=>x.id===id); return t ? '<b>'+t.a+'</b>' : ''; }).filter(Boolean).join(' · ')
     : '无（纯说明步骤）');
   $('#stepNote').title = '';
+  renderSignalNotes();
 }
 
 /* 高亮 */
@@ -1624,6 +1635,92 @@ function renderFilters(){
   }));
 }
 
+/* ---------- 场景信号说明 ---------- */
+const MMS_INFO = {
+  reset:  ['000 复位', '写 EGR.UG（或从模式复位）时输出一个脉冲'],
+  enable: ['001 使能', '输出 CNT_EN 电平（CEN 与门控相与）'],
+  update: ['010 更新', '每次 UEV 输出一个脉冲'],
+  compare:['011 比较脉冲', 'CC1I（捕获/比较事件）时输出一个脉冲'],
+  oc1ref: ['100 OC1REFC', '直接输出 tim_oc1refc 电平'],
+  oc2ref: ['101 OC2REFC', '直接输出 tim_oc2refc 电平']
+};
+const SMS_TEXT = {
+  off:'从模式关闭', reset:'复位模式', gated:'门控模式', trigger:'触发模式',
+  extclk:'外部时钟1', resett:'复位+触发', gatedreset:'门控+复位'
+};
+const TS_TEXT = {itr2:'ITR2（TIM3_TRGO）', ti1fp1:'TI1FP1', ti1f_ed:'TI1F_ED', ti2fp2:'TI2FP2'};
+
+function renderSignalNotes(){
+  const wrap = $('#sigWrap');
+  if(!wrap) return;
+  const c = S.cfg, r = S.rt, is15 = S.device === 'TIM15';
+  const ON = '<span style="color:#7ee2a0">● 有效</span>';
+  const OFF = '<span style="color:#ff9f45">○ 无</span>';
+  const ocm = c.ocm === 6 ? 'PWM 模式1' : c.ocm === 7 ? 'PWM 模式2' : '冻结';
+  const noTick = sc().id === 'dmaburst' || sc().id === 'devices';
+  const rows = [];
+
+  let cntCond;
+  if(c.sms === 'gated') cntCond = '门控：TRGI 高时每拍 +1，TRGI 低时停在当前值';
+  else if(c.sms === 'gatedreset') cntCond = '门控+复位：TRGI 高计数，TRGI 变低停止并清零';
+  else if(c.sms === 'extclk') cntCond = '每个 TRGI 上升沿 +1（PSC 仍可分频）';
+  else if(c.sms === 'trigger') cntCond = 'TRGI 上升沿把 CEN 置 1，之后每拍 +1';
+  else if(c.sms === 'reset') cntCond = 'TRGI 上升沿把 CNT 与 PSC 清零，随后继续计数';
+  else if(c.sms === 'resett') cntCond = 'TRGI 上升沿清零并启动计数';
+  else cntCond = c.cen ? 'CEN=1，每个 tim_cnt_ck +1，到 ARR 回 0' : 'CEN=0，计数器停住';
+  rows.push(['CNT', '计数器当前值，波形的“时间轴”', ON, cntCond]);
+
+  const oc1On = c.cc1s === 'out' && c.cc1e && c.moe;
+  rows.push(['OC1', '通道1 输出（PWM/比较波形）', oc1On ? ON : OFF,
+    oc1On ? `CCR1 与 CNT 比较（${ocm}），经 DTG/极性后送引脚` : 'CC1E=0 或 MOE=0：本场景不驱动引脚']);
+
+  const oc1nOn = c.cc1s === 'out' && c.cc1ne && c.moe;
+  rows.push(['OC1N', '通道1 互补输出', oc1nOn ? ON : OFF,
+    oc1nOn ? 'OC1 的互补波形，上升沿被 DTG 延后 t_DTG' : 'CC1NE=0：本场景不输出互补波形']);
+
+  const oc2On = is15 && c.cc2s === 'out' && c.cc2e && c.moe;
+  rows.push(['OC2', '通道2 输出', oc2On ? ON : OFF,
+    oc2On ? 'CCR2 与 CNT 比较（PWM1），无互补、无死区' : (is15 ? 'CC2E=0 或 MOE=0：本场景不驱动引脚' : 'TIM16/17 没有 CH2')]);
+
+  const trgiOn = is15 && c.sms !== 'off';
+  const lvl = c.trigiMode === 'manual' ? (r.manual ? '手动高' : '手动低') : '自动方波';
+  rows.push(['TRGI', '从模式触发输入（TS 选择）', trgiOn ? ON : OFF,
+    trgiOn ? `当前 ${TS_TEXT[c.ts] || c.ts}，${lvl}；用于${SMS_TEXT[c.sms]}` : 'SMS=0000，TRGI 不参与控制']);
+
+  rows.push(['UIF', '更新中断标志', noTick ? OFF : ON,
+    noTick ? '本场景不运行计数，不会产生'
+      : (c.rcr > 0 ? `每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1；波形画成短脉冲便于观察`
+                   : '每次溢出产生 UEV 时置 1；UIE=1 才进 NVIC；波形画成短脉冲便于观察')]);
+
+  rows.push(['CC1IF', '捕获/比较 1 标志', noTick ? OFF : ON,
+    noTick ? '本场景不运行计数，不会产生'
+      : (c.cc1s === 'in' ? 'TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（来自 CC1I 事件）'
+                         : 'CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位）')]);
+
+  const bifOn = !!c.bke;
+  rows.push(['BIF', '刹车中断标志', bifOn ? ON : OFF,
+    bifOn ? 'BKIN / 系统刹车 / 比较器刹车经 Break circuitry 产生 tim_brk 时置 1'
+          : 'BKE=0：本场景不产生刹车事件']);
+
+  const m = MMS_INFO[c.mms] || MMS_INFO.update;
+  const mmsLine = Object.keys(MMS_INFO).map(k=>{
+    const on = c.mms === k;
+    return `<span style="display:inline-block;margin:1px 8px 1px 0;color:${on ? '#ffcf9c' : '#7b8fa1'}">${on ? '●' : '○'} ${MMS_INFO[k][0]}</span>`;
+  }).join('');
+  rows.push(['TRGO', '主模式触发输出（MMS 选择）', is15 ? ON : OFF,
+    is15 ? `<b>当前 ${m[0]}</b>：${m[1]}<div style="margin-top:2px;line-height:1.75">${mmsLine}</div>`
+         : 'TIM16/17 没有 MMS/TRGO（硬件不存在）']);
+
+  wrap.innerHTML = '<div class="deliv-note">场景：<b>' + sc().name + '</b> · 步骤 '
+    + (S.step + 1) + '/' + sc().steps.length + ' — ' + sc().steps[S.step].t + '</div>'
+    + '<table class="gt"><thead><tr><th style="width:64px">信号</th><th style="width:180px">作用 / 控制什么</th>'
+    + '<th style="width:58px">本场景</th><th>产生条件 / 说明</th></tr></thead><tbody>'
+    + rows.map(x=> '<tr><td class="ab">' + x[0] + '</td><td>' + x[1] + '</td><td>' + x[2] + '</td><td>' + x[3] + '</td></tr>').join('')
+    + '</tbody></table>';
+  const t = $('#sigScene');
+  if(t) t.textContent = sc().name + ' · ' + (S.step + 1) + '/' + sc().steps.length;
+}
+
 /* 出货清单 */
 const DELIVERY = [
  {t:'tim_it', s:'tim_it', dir:'输出', from:'IRQ interface', to:'NVIC 的 TIMx 全局中断', use:'UIF/CC1IF/CC2IF/BIF 经 DIER 使能后 OR 成一根中断线，软件在 ISR 里分辨标志', lim:'所有型号'},
@@ -1749,6 +1846,7 @@ function setDevice(d){
   });
   if(d !== 'TIM15' && isV15Scene(S.scene)) selectScene(0);
   renderRegs();
+  renderSignalNotes();
 }
 
 function updatePlayBtn(){
@@ -1839,6 +1937,7 @@ function setTrgiMode(m){
   }
   $$('[data-trg]').forEach(b=> b.classList.toggle('on', b.dataset.trg === m));
   drawWave(); lastStat = 0; updateStat();
+  renderSignalNotes();
 }
 function forceTi1Edge(){
   if(S.cfg.cc1s !== 'in') return;
@@ -1950,6 +2049,7 @@ function init(){
     openDrawer(true);
     if(b.dataset.tab === 'regs') renderRegs();
     if(b.dataset.tab === 'code') renderCode();
+    if(b.dataset.tab === 'signals') renderSignalNotes();
     setTimeout(fitCanvas, 80);
   }));
   $('#drawerToggle').addEventListener('click', ()=> openDrawer());
@@ -1961,6 +2061,13 @@ function init(){
     $('#gq').focus();
   });
   $('#gq').addEventListener('input', renderGlossary);
+  $('#btnSigNote').addEventListener('click', ()=>{
+    $$('.dtab').forEach(x=> x.classList.toggle('on', x.dataset.tab === 'signals'));
+    $$('.pane').forEach(p=> p.classList.remove('on'));
+    $('#pane-signals').classList.add('on');
+    openDrawer(true);
+    renderSignalNotes();
+  });
 
   /* 寄存器位域点击 */
   $('#regWrap').addEventListener('click', e=>{
