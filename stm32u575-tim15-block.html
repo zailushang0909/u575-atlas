@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -55,12 +55,17 @@ button{font-family:inherit;color:inherit}
 .dgm-body{flex:1;min-height:0;overflow:auto;padding:8px 10px 4px;background:
   linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px) 0 0/100% 28px,
   linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px) 0 0/28px 100%}
-#bdiag{width:100%;height:auto;display:block;min-width:740px;max-height:100%}
-#bdiag text{font-family:var(--sans);fill:#c9d9e7;font-size:9.5px;pointer-events:none}
-#bdiag .mname{font-size:9px;fill:#d6e5f2}
-#bdiag .msub{font-size:7.8px;fill:#8296aa}
-#bdiag .ext{font-family:var(--mono);font-size:8.6px;fill:#9fb6c9}
-#bdiag .lab{font-family:var(--mono);font-size:7.8px;fill:#87a0b5}
+#bdiag{width:100%;height:auto;display:block;min-width:740px;max-height:none}
+#bdiag text{font-family:var(--sans);fill:#c9d9e7;font-size:10.5px;pointer-events:none}
+#bdiag .mname{font-size:10.2px;fill:#d6e5f2}
+#bdiag .msub{font-size:8.4px;fill:#8296aa}
+#bdiag .ext{font-family:var(--mono);font-size:9.8px;fill:#9fb6c9}
+#bdiag .lab{font-family:var(--mono);font-size:8.4px;fill:#87a0b5}
+#bdiag .frame{fill:none;stroke:#2a3a49;stroke-dasharray:3 3}
+.dgm-head .zoom{margin-left:auto;display:flex;gap:4px;align-items:center}
+.dgm-head .zoom .btn{height:22px;padding:0 7px;font-size:10px}
+.main.focus{grid-template-columns:1fr}
+.main.focus .console{display:none}
 #bdiag .frame{fill:none;stroke:#2a3a49;stroke-dasharray:3 3}
 #bdiag .mod rect{fill:#111b26;stroke:#2b3d4d;stroke-width:1;rx:3}
 #bdiag .mod{pointer-events:all;cursor:pointer}
@@ -263,237 +268,273 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
     <div class="dgm-head">
       <b>Figure 675 · TIM15 block diagram</b>
       <span>悬停看释义 · 点击信号高亮整条路径</span>
-      <span class="src" id="dgmSrc">按原图拓扑重绘（非等比）</span>
+      <div class="zoom">
+        <button class="btn on" data-zoom="fit">适应</button>
+        <button class="btn" data-zoom="1">100%</button>
+        <button class="btn" data-zoom="1.3">130%</button>
+        <button class="btn" id="btnFocus">专注框图</button>
+      </div>
     </div>
     <div class="dgm-body">
-      <svg id="bdiag" viewBox="0 0 900 540" aria-label="TIM15 框图">
+            <svg id="bdiag" viewBox="0 0 1240 700" aria-label="TIM15 框图">
         <defs>
           <marker id="arw" viewBox="0 0 8 8" refX="7.2" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/>
           </marker>
         </defs>
-        <rect class="frame" x="100" y="14" width="708" height="510"/>
+        <rect class="frame" x="190" y="16" width="870" height="668"/>
 
-        <!-- 左侧外部信号 -->
-        <text class="ext" x="8" y="34">tim_ker_ck</text>
-        <text class="ext" x="8" y="70">tim_itr[15:0]</text>
-        <text class="ext" x="8" y="126">tim_it</text>
-        <text class="ext" x="8" y="172">tim_pclk</text>
-        <text class="ext" x="8" y="236">tim_ti1_in[15:0]</text>
-        <text class="ext" x="8" y="316">tim_ti2_in[15:0]</text>
-        <text class="ext" x="8" y="364">tim_cc1_dma</text>
-        <text class="ext" x="8" y="376">tim_upd_dma</text>
-        <text class="ext" x="8" y="388">tim_trg_dma</text>
-        <text class="ext" x="8" y="400">tim_com_dma</text>
-        <text class="ext" x="8" y="466">tim_ocref_clr[7:0]</text>
-        <text class="ext" x="8" y="490">tim_sys_brk</text>
-        <text class="ext" x="8" y="506">TIM_BKIN</text>
-        <text class="ext" x="8" y="522">tim_brk_cmp[8:1]</text>
+        <!-- ============ 左侧外部信号 ============ -->
+        <text class="ext" x="8" y="40">tim_ker_ck</text>
+        <text class="ext v15only" x="8" y="80">tim_itr[15:0]</text>
+        <text class="ext" x="8" y="136">tim_it</text>
+        <text class="ext" x="8" y="192">tim_pclk</text>
+        <text class="ext" x="8" y="262">tim_ti1_in[15:0]</text>
+        <text class="ext v15only" x="8" y="382">tim_ti2_in[15:0]</text>
+        <text class="ext" x="8" y="466">tim_cc1_dma</text>
+        <text class="ext" x="8" y="484">tim_upd_dma</text>
+        <text class="ext v15only" x="8" y="502">tim_trg_dma</text>
+        <text class="ext v15only" x="8" y="520">tim_com_dma</text>
+        <text class="ext" x="8" y="556">tim_ocref_clr[7:0]</text>
+        <text class="ext" x="8" y="596">tim_sys_brk[n:0]</text>
+        <text class="ext" x="8" y="616">TIM_BKIN</text>
+        <text class="ext" x="8" y="636">tim_brk_cmp[8:1]</text>
 
-        <!-- 总线 -->
+        <!-- ============ APB / IRQ / DMA ============ -->
         <g class="mod" data-t="tim_pclk" id="m_bus">
-          <rect x="128" y="96" width="16" height="292" rx="3" fill="#0f1a24"/>
-          <text class="msub" transform="translate(138,250) rotate(-90)" text-anchor="middle">32-bit APB 总线</text>
+          <rect x="198" y="150" width="12" height="62" rx="2" fill="#0f1a24"/>
+          <text class="msub" transform="translate(206,181) rotate(-90)" text-anchor="middle">APB</text>
         </g>
-
-        <!-- IRQ / DMA -->
+        <g class="mod" data-t="tim_pclk" id="m_bus2">
+          <rect x="198" y="458" width="12" height="82" rx="2" fill="#0f1a24"/>
+          <text class="msub" transform="translate(206,499) rotate(-90)" text-anchor="middle">APB</text>
+        </g>
         <g class="mod ctl" data-t="irq_if" id="m_irq">
-          <rect x="178" y="104" width="62" height="36"/>
-          <text x="209" y="120" text-anchor="middle" class="mname">IRQ</text>
-          <text x="209" y="131" text-anchor="middle" class="msub">interface</text>
+          <rect x="224" y="128" width="90" height="42"/>
+          <text x="269" y="145" text-anchor="middle" class="mname">IRQ</text>
+          <text x="269" y="158" text-anchor="middle" class="msub">interface</text>
         </g>
         <g class="mod ctl" data-t="dma_if" id="m_dma">
-          <rect x="178" y="352" width="62" height="46"/>
-          <text x="209" y="369" text-anchor="middle" class="mname">DMA</text>
-          <text x="209" y="380" text-anchor="middle" class="msub">interface</text>
+          <rect x="224" y="458" width="90" height="82"/>
+          <text x="269" y="494" text-anchor="middle" class="mname">DMA</text>
+          <text x="269" y="507" text-anchor="middle" class="msub">interface</text>
         </g>
 
-        <!-- 触发 / 从模式 -->
-        <g class="mod ctl" data-t="trigger_controller" id="m_trigc">
-          <rect x="556" y="20" width="98" height="52"/>
-          <text x="605" y="41" text-anchor="middle" class="mname">Trigger</text>
-          <text x="605" y="53" text-anchor="middle" class="mname">controller</text>
+        <!-- ============ 触发器 / 从模式 ============ -->
+        <g class="mod ctl v15only" data-t="trigger_controller" id="m_trigc">
+          <rect x="860" y="30" width="140" height="66"/>
+          <text x="930" y="54" text-anchor="middle" class="mname">Trigger controller</text>
+          <text x="930" y="70" text-anchor="middle" class="msub">MMS → tim_trgo</text>
         </g>
         <g class="mod ctl v15only" data-t="slave_controller" id="m_slave">
-          <rect x="556" y="72" width="98" height="64"/>
-          <text x="605" y="91" text-anchor="middle" class="mname">Slave mode</text>
-          <text x="605" y="103" text-anchor="middle" class="mname">controller</text>
-          <text x="605" y="118" text-anchor="middle" class="msub">SMS / TS / SMSPE</text>
+          <rect x="860" y="108" width="140" height="88"/>
+          <text x="930" y="130" text-anchor="middle" class="mname">Slave mode</text>
+          <text x="930" y="143" text-anchor="middle" class="mname">controller</text>
+          <text x="930" y="160" text-anchor="middle" class="msub">SMS[3:0] / TS / MSM</text>
         </g>
 
-        <!-- 预分频 / 计数 / 重装 -->
+        <!-- ============ 时基 ============ -->
         <g class="mod" data-t="psc" id="m_psc">
-          <rect x="392" y="148" width="60" height="44"/>
-          <text x="422" y="167" text-anchor="middle" class="mname">PSC</text>
-          <text x="422" y="179" text-anchor="middle" class="msub">prescaler</text>
+          <rect x="560" y="300" width="65" height="44"/>
+          <text x="592" y="319" text-anchor="middle" class="mname">PSC</text>
+          <text x="592" y="332" text-anchor="middle" class="msub">prescaler</text>
         </g>
         <g class="mod" data-t="cnt" id="m_cnt">
-          <rect x="478" y="148" width="68" height="44"/>
-          <text x="512" y="167" text-anchor="middle" class="mname">CNT</text>
-          <text x="512" y="179" text-anchor="middle" class="msub">16-bit up counter</text>
+          <rect x="650" y="300" width="85" height="44"/>
+          <text x="692" y="319" text-anchor="middle" class="mname">CNT</text>
+          <text x="692" y="332" text-anchor="middle" class="msub">16-bit up</text>
         </g>
         <g class="mod" data-t="arr" id="m_arr">
-          <rect x="478" y="94" width="120" height="32"/>
-          <text x="538" y="108" text-anchor="middle" class="mname">Auto-reload register</text>
-          <text x="538" y="120" text-anchor="middle" class="msub">ARR · 影子 / 预装载</text>
+          <rect x="640" y="196" width="115" height="36"/>
+          <text x="697" y="212" text-anchor="middle" class="mname">Auto-reload</text>
+          <text x="697" y="225" text-anchor="middle" class="msub">ARR[19:0]</text>
         </g>
         <g class="mod" data-t="rep" id="m_rep">
-          <rect x="636" y="94" width="106" height="32"/>
-          <text x="689" y="108" text-anchor="middle" class="mname">Repetition counter</text>
-          <text x="689" y="120" text-anchor="middle" class="msub">RCR / REP[7:0]</text>
+          <rect x="640" y="240" width="115" height="36"/>
+          <text x="697" y="256" text-anchor="middle" class="mname">Repetition</text>
+          <text x="697" y="269" text-anchor="middle" class="msub">RCR · REP[7:0]</text>
         </g>
 
-        <!-- 输入通道 -->
+        <!-- ============ 输入通道 ============ -->
         <g class="mod" data-t="xor" id="m_xor">
-          <rect x="240" y="218" width="30" height="30"/>
-          <text x="255" y="237" text-anchor="middle" class="mname">XOR</text>
+          <rect x="316" y="250" width="34" height="34"/>
+          <text x="333" y="271" text-anchor="middle" class="mname">XOR</text>
         </g>
         <g class="mod" data-t="ti1f" id="m_ti1f">
-          <rect x="284" y="196" width="88" height="60"/>
-          <text x="328" y="214" text-anchor="middle" class="mname">TI1 input filter</text>
-          <text x="328" y="226" text-anchor="middle" class="mname">&amp; edge detector</text>
-          <text x="328" y="242" text-anchor="middle" class="msub">IC1F · CC1P · CKD</text>
+          <rect x="370" y="234" width="100" height="74"/>
+          <text x="420" y="254" text-anchor="middle" class="mname">TI1 input filter</text>
+          <text x="420" y="266" text-anchor="middle" class="mname">&amp; edge detector</text>
+          <text x="420" y="283" text-anchor="middle" class="msub">IC1F · CC1P · CKD</text>
         </g>
         <g class="mod v15only" data-t="ti2f" id="m_ti2f">
-          <rect x="284" y="286" width="88" height="60"/>
-          <text x="328" y="304" text-anchor="middle" class="mname">TI2 input filter</text>
-          <text x="328" y="316" text-anchor="middle" class="mname">&amp; edge detector</text>
-          <text x="328" y="332" text-anchor="middle" class="msub">IC2F · CC2P · CKD</text>
+          <rect x="370" y="354" width="100" height="74"/>
+          <text x="420" y="374" text-anchor="middle" class="mname">TI2 input filter</text>
+          <text x="420" y="386" text-anchor="middle" class="mname">&amp; edge detector</text>
+          <text x="420" y="403" text-anchor="middle" class="msub">IC2F · CC2P · CKD</text>
         </g>
         <g class="mod" data-t="ic1ps" id="m_ic1ps">
-          <rect x="392" y="206" width="60" height="34"/>
-          <text x="422" y="227" text-anchor="middle" class="mname">Prescaler</text>
+          <rect x="495" y="356" width="60" height="34"/>
+          <text x="525" y="371" text-anchor="middle" class="mname">Prescaler</text>
+          <text x="525" y="383" text-anchor="middle" class="msub">IC1PSC</text>
         </g>
-        <g class="mod v15only" data-t="ic2ps" id="m_ic2ps">
-          <rect x="392" y="296" width="60" height="34"/>
-          <text x="422" y="317" text-anchor="middle" class="mname">Prescaler</text>
+        <g class="mod v15only" data-t="ic1ps" id="m_ic2ps">
+          <rect x="495" y="442" width="60" height="34"/>
+          <text x="525" y="457" text-anchor="middle" class="mname">Prescaler</text>
+          <text x="525" y="469" text-anchor="middle" class="msub">IC2PSC</text>
         </g>
 
-        <!-- 捕获/比较 -->
+        <!-- ============ 捕获/比较 ============ -->
         <g class="mod" data-t="ccr1" id="m_ccr1">
-          <rect x="574" y="194" width="112" height="42"/>
-          <text x="630" y="211" text-anchor="middle" class="mname">Capture/Compare</text>
-          <text x="630" y="223" text-anchor="middle" class="mname">1 register</text>
-          <text x="630" y="232" text-anchor="middle" class="msub">CCR1 · 影子</text>
+          <rect x="600" y="360" width="160" height="44"/>
+          <text x="680" y="378" text-anchor="middle" class="mname">Capture/Compare 1</text>
+          <text x="680" y="392" text-anchor="middle" class="msub">CCR1 · 影子寄存器</text>
         </g>
         <g class="mod v15only" data-t="ccr2" id="m_ccr2">
-          <rect x="574" y="282" width="112" height="42"/>
-          <text x="630" y="299" text-anchor="middle" class="mname">Capture/Compare</text>
-          <text x="630" y="311" text-anchor="middle" class="mname">2 register</text>
-          <text x="630" y="320" text-anchor="middle" class="msub">CCR2 · 影子</text>
+          <rect x="600" y="450" width="160" height="44"/>
+          <text x="680" y="468" text-anchor="middle" class="mname">Capture/Compare 2</text>
+          <text x="680" y="482" text-anchor="middle" class="msub">CCR2 · 影子寄存器</text>
         </g>
 
-        <!-- 死区 / 输出 -->
+        <!-- ============ 触发源选择 ============ -->
+        <g class="mod ctl v15only" data-t="TS" id="m_ts">
+          <rect x="540" y="110" width="90" height="86"/>
+          <text x="585" y="138" text-anchor="middle" class="mname">TS[4:0]</text>
+          <text x="585" y="151" text-anchor="middle" class="msub">触发源选择</text>
+          <text x="585" y="170" text-anchor="middle" class="msub">ITR / TI1F_ED</text>
+          <text x="585" y="182" text-anchor="middle" class="msub">TI1FP1 / TI2FP2</text>
+        </g>
+
+        <!-- ============ 输出 ============ -->
         <g class="mod" data-t="dtg_reg" id="m_dtg_reg">
-          <rect x="700" y="150" width="74" height="32"/>
-          <text x="737" y="165" text-anchor="middle" class="mname">DTG registers</text>
-          <text x="737" y="176" text-anchor="middle" class="msub">BDTR.DTG[7:0]</text>
+          <rect x="870" y="300" width="80" height="36"/>
+          <text x="910" y="316" text-anchor="middle" class="mname">DTG registers</text>
+          <text x="910" y="329" text-anchor="middle" class="msub">BDTR.DTG</text>
         </g>
         <g class="mod" data-t="dtg" id="m_dtg">
-          <rect x="700" y="200" width="42" height="40"/>
-          <text x="721" y="218" text-anchor="middle" class="mname">DTG</text>
-          <text x="721" y="230" text-anchor="middle" class="msub">dead-time</text>
+          <rect x="870" y="356" width="50" height="40"/>
+          <text x="895" y="374" text-anchor="middle" class="mname">DTG</text>
+          <text x="895" y="387" text-anchor="middle" class="msub">dead-time</text>
         </g>
         <g class="mod" data-t="output_control" id="m_oc1">
-          <rect x="766" y="190" width="62" height="62"/>
-          <text x="797" y="212" text-anchor="middle" class="mname">Output</text>
-          <text x="797" y="224" text-anchor="middle" class="mname">control</text>
-          <text x="797" y="238" text-anchor="middle" class="msub">CH1</text>
+          <rect x="945" y="340" width="105" height="80"/>
+          <text x="997" y="370" text-anchor="middle" class="mname">Output</text>
+          <text x="997" y="383" text-anchor="middle" class="mname">control</text>
+          <text x="997" y="400" text-anchor="middle" class="msub">CH1</text>
         </g>
         <g class="mod v15only" data-t="output_control" id="m_oc2">
-          <rect x="766" y="284" width="62" height="58"/>
-          <text x="797" y="306" text-anchor="middle" class="mname">Output</text>
-          <text x="797" y="318" text-anchor="middle" class="mname">control</text>
-          <text x="797" y="332" text-anchor="middle" class="msub">CH2</text>
+          <rect x="945" y="430" width="105" height="80"/>
+          <text x="997" y="460" text-anchor="middle" class="mname">Output</text>
+          <text x="997" y="473" text-anchor="middle" class="mname">control</text>
+          <text x="997" y="490" text-anchor="middle" class="msub">CH2</text>
         </g>
 
-        <!-- 刹车 -->
+        <!-- ============ 刹车 ============ -->
         <g class="mod" data-t="break_circuit" id="m_brk">
-          <rect x="182" y="470" width="70" height="52"/>
-          <text x="217" y="492" text-anchor="middle" class="mname">Break</text>
-          <text x="217" y="504" text-anchor="middle" class="mname">circuitry</text>
+          <rect x="252" y="590" width="90" height="80"/>
+          <text x="297" y="622" text-anchor="middle" class="mname">Break</text>
+          <text x="297" y="635" text-anchor="middle" class="mname">circuitry</text>
         </g>
 
-        <!-- 连线 -->
-        <path class="sig clk" data-t="tim_ker_ck" d="M100,38 H420 V148"/>
-        <path class="sig trig v15only" data-t="tim_itr" d="M100,66 H530 V118 H556"/>
-        <path class="sig irq" data-t="tim_it" d="M178,122 H100"/>
-        <path class="sig clk" data-t="tim_pclk" d="M100,168 H128"/>
-        <path class="sig bus" data-t="tim_pclk" d="M144,122 H178"/>
-        <path class="sig bus" data-t="tim_pclk" d="M144,176 H178" stroke-dasharray="2 2"/>
+        <!-- ============ 连线 ============ -->
+        <!-- 时钟 -->
+        <path class="sig clk" data-t="tim_ker_ck" d="M180,44 H360 V322 H560"/>
+        <text class="lab" x="490" y="316">tim_psc_ck</text>
+        <path class="sig clk" data-t="tim_cnt_ck" d="M625,322 H650"/>
 
-        <path class="sig in" data-t="tim_ti1_in" d="M100,232 H240"/>
-        <path class="sig in v15only" data-t="tim_ti2_in" d="M100,312 H284"/>
-        <path class="sig in v15only" data-t="tim_ti2_in" d="M252,312 V248"/>
-        <path class="sig in" data-t="tim_ti1_in" d="M270,233 H284"/>
+        <!-- 触发输入 -->
+        <path class="sig trig v15only" data-t="tim_itr" d="M180,84 H520 V130 H540"/>
+        <path class="sig evt v15only" data-t="tim_ti1f_ed" d="M470,246 H490 V150 H540"/>
+        <path class="sig evt v15only" data-t="tim_ti1fp1" d="M470,262 H502 V170 H540"/>
+        <path class="sig evt v15only" data-t="tim_ti2fp2" d="M470,374 H486 V190 H540"/>
+        <path class="sig trig v15only" data-t="tim_trgi" d="M630,153 H860"/>
+        <path class="sig trig v15only" data-t="tim_trc" d="M930,96 V108"/>
+        <path class="sig trig v15only" data-t="tim_trgo" d="M1000,60 H1210"/>
 
-        <path class="sig evt" data-t="tim_ic1" d="M372,225 H392"/>
-        <path class="sig evt" data-t="tim_ic1" d="M452,223 H574"/>
-        <path class="sig evt v15only" data-t="tim_ic2" d="M372,316 H392"/>
-        <path class="sig evt v15only" data-t="tim_ic2" d="M452,316 H560 V303 H574"/>
+        <text class="lab v15only" x="430" y="80">tim_itr</text>
+        <text class="lab v15only" x="486" y="146" text-anchor="end">ti1f_ed</text>
+        <text class="lab v15only" x="536" y="166" text-anchor="end">ti1fp1</text>
+        <text class="lab v15only" x="482" y="186" text-anchor="end">ti2fp2</text>
+        <text class="lab v15only" x="690" y="147">tim_trgi</text>
+        <text class="lab v15only" x="936" y="104">tim_trc</text>
+        <text class="lab v15only" x="1010" y="54">tim_trgo</text>
 
-        <path class="sig trig" data-t="tim_ti1fp1" d="M372,203 V142 H520 V118 H556"/>
-        <path class="sig trig" data-t="tim_ti1f_ed" d="M372,196 V160 H544 V100 H556"/>
-        <path class="sig trig v15only" data-t="tim_ti2fp2" d="M372,340 V352 H532 V130 H556"/>
+        <!-- 输入捕获 -->
+        <path class="sig in" data-t="tim_ti1_in" d="M180,266 H316"/>
+        <path class="sig in v15only" data-t="tim_ti2_in" d="M180,382 H370"/>
+        <path class="sig in v15only" data-t="tim_ti2_in" d="M330,382 V284"/>
+        <path class="sig in" data-t="tim_ti1_in" d="M350,267 H370"/>
 
-        <path class="sig trig" data-t="tim_trc" d="M605,72 V70"/>
-        <path class="sig trig" data-t="slave_controller" d="M605,136 V144 H420 V148"/>
-        <path class="sig trig" data-t="slave_controller" d="M500,144 V148"/>
-        <path class="sig clk" data-t="tim_psc_ck" d="M420,38 V148"/>
-        <path class="sig clk" data-t="tim_cnt_ck" d="M452,170 H478"/>
-        <path class="sig evt" data-t="CNT" d="M546,170 H560 V215 H574"/>
-        <path class="sig evt v15only" data-t="CNT" d="M546,182 H560 V303 H574"/>
-        <path class="sig evt" data-t="CC1IF" d="M630,194 V150 H656 V44 H652"/>
-        <path class="sig evt" data-t="UEV" d="M598,110 H636"/>
-        <path class="sig evt" data-t="UEV" d="M520,126 V140 H700 V136"/>
-        <path class="sig trig v15only" data-t="tim_trgo" d="M654,44 H868"/>
+        <path class="sig evt" data-t="tim_ic1" d="M470,271 H480 V373 H495"/>
+        <path class="sig evt" data-t="tim_ic1" d="M555,373 H575 V382 H600"/>
+        <path class="sig evt v15only" data-t="tim_ic2" d="M470,391 H486 V459 H495"/>
+        <path class="sig evt v15only" data-t="tim_ic2" d="M555,459 H575 V472 H600"/>
+        <text class="lab" x="558" y="350">tim_ic1</text>
+        <text class="lab v15only" x="558" y="438">tim_ic2</text>
 
-        <path class="sig out" data-t="tim_oc1ref" d="M686,222 H700"/>
-        <path class="sig out" data-t="tim_oc1" d="M742,220 H766"/>
-        <path class="sig out" data-t="tim_oc1" d="M828,210 H868"/>
-        <path class="sig out" data-t="tim_oc1n" d="M828,236 H868"/>
-        <path class="sig out v15only" data-t="tim_oc2" d="M686,303 H766"/>
-        <path class="sig out v15only" data-t="tim_oc2" d="M828,310 H868"/>
-        <path class="sig evt" data-t="dtg" d="M737,182 V200" stroke-dasharray="3 2"/>
+        <!-- CNT 比较 -->
+        <path class="sig evt" data-t="CC1IF" d="M680,344 V360"/>
+        <path class="sig evt v15only" data-t="CC2IF" d="M735,332 H775 V472 H760"/>
+        <text class="lab" x="686" y="354">CC1</text>
+        <text class="lab v15only" x="788" y="420" transform="rotate(-90 788,420)">CC2</text>
 
-        <path class="sig evt" data-t="tim_brk" d="M252,496 H800 V346"/>
-        <path class="sig evt" data-t="tim_brk" d="M252,496 H780 V252"/>
-        <path class="sig in" data-t="tim_ocref_clr" d="M100,462 H744 V346 H766"/>
-        <path class="sig in" data-t="tim_bkin" d="M100,486 H182"/>
-        <path class="sig in" data-t="tim_sys_brk" d="M100,502 H182"/>
-        <path class="sig in" data-t="tim_brk_cmp" d="M100,518 H182"/>
+        <!-- UEV -->
+        <path class="sig evt" data-t="UEV" d="M700,300 V286 H770"/>
+        <path class="sig evt" data-t="UEV" d="M770,286 V214"/>
+        <path class="sig evt" data-t="UEV" d="M770,258 H755"/>
+        <path class="sig evt" data-t="UEV" d="M770,214 H755"/>
+        <text class="lab" x="706" y="281">UEV</text>
 
-        <path class="sig dma" data-t="tim_cc1_dma" d="M178,360 H100"/>
-        <path class="sig dma" data-t="tim_upd_dma" d="M178,372 H100"/>
-        <path class="sig dma v15only" data-t="tim_trg_dma" d="M178,384 H100"/>
-        <path class="sig dma v15only" data-t="tim_com_dma" d="M178,396 H100"/>
+        <!-- 从模式控制 -->
+        <path class="sig trig v15only" data-t="slave_controller" d="M900,196 V292 H600 V300"/>
+        <path class="sig trig v15only" data-t="slave_controller" d="M700,292 V300"/>
+        <text class="lab v15only" x="912" y="248" transform="rotate(-90 912,248)" text-anchor="middle">Reset / Enable / Up</text>
 
-        <!-- 连线标注 -->
-        <text class="lab" x="430" y="34">tim_ker_ck</text>
-        <text class="lab" x="300" y="62">tim_itr 触发选择</text>
-        <text class="lab" x="140" y="118">tim_it</text>
-        <text class="lab" x="148" y="164">tim_pclk</text>
-        <text class="lab" x="430" y="143">tim_psc_ck</text>
-        <text class="lab" x="455" y="165">tim_cnt_ck</text>
-        <text class="lab" x="565" y="209">CC1</text>
-        <text class="lab" x="562" y="297">CC2</text>
-        <text class="lab" x="474" y="210">tim_ic1</text>
-        <text class="lab" x="474" y="311">tim_ic2</text>
-        <text class="lab" x="404" y="156">tim_ti1fp1</text>
-        <text class="lab" x="470" y="155">tim_ti1f_ed</text>
-        <text class="lab" x="615" y="67">tim_trc</text>
-        <text class="lab" x="470" y="139">Reset / enable / up-count</text>
-        <text class="lab" x="602" y="147">CC1I</text>
-        <text class="lab" x="548" y="136">UEV</text>
-        <text class="lab" x="700" y="38">tim_trgo</text>
-        <text class="lab" x="690" y="190">tim_oc1ref</text>
-        <text class="lab" x="838" y="205">tim_oc1</text>
-        <text class="lab" x="838" y="249">tim_oc1n</text>
-        <text class="lab" x="694" y="299">tim_oc2ref</text>
-        <text class="lab" x="838" y="324">tim_oc2</text>
-        <text class="lab" x="560" y="490">tim_brk</text>
-        <text class="lab" x="560" y="458">tim_ocref_clr_int</text>
+        <!-- 比较事件送触发器 -->
+        <path class="sig evt v15only" data-t="CC1IF" d="M760,382 H830 V80 H860"/>
+        <path class="sig evt v15only" data-t="CC2IF" d="M760,472 H845 V94 H860"/>
+        <text class="lab v15only" x="812" y="250" transform="rotate(-90 812,250)">CC1I / CC2I</text>
+
+        <!-- 输出链 -->
+        <path class="sig out" data-t="tim_oc1ref" d="M760,376 H870"/>
+        <path class="sig out" data-t="tim_oc1" d="M920,376 H945"/>
+        <path class="sig out v15only" data-t="tim_oc2" d="M760,472 H945"/>
+        <path class="sig evt" data-t="dtg" d="M910,336 V356" stroke-dasharray="3 2"/>
+        <path class="sig out" data-t="tim_oc1" d="M1050,362 H1210"/>
+        <path class="sig out" data-t="tim_oc1n" d="M1050,398 H1210"/>
+        <path class="sig out v15only" data-t="tim_oc2" d="M1050,472 H1210"/>
+        <text class="lab" x="782" y="370">tim_oc1ref</text>
+        <text class="lab" x="1060" y="356">tim_oc1</text>
+        <text class="lab" x="1060" y="371">TIM_CH1</text>
+        <text class="lab" x="1060" y="392">tim_oc1n</text>
+        <text class="lab" x="1060" y="407">TIM_CH1N</text>
+        <text class="lab v15only" x="1060" y="466">tim_oc2</text>
+        <text class="lab v15only" x="1060" y="481">TIM_CH2</text>
+
+        <!-- 刹车与 OCREF clear -->
+        <path class="sig evt" data-t="tim_brk" d="M342,630 H935 V410 H945"/>
+        <path class="sig evt v15only" data-t="tim_brk" d="M935,500 H945"/>
+        <text class="lab" x="600" y="624">tim_brk</text>
+        <path class="sig in" data-t="tim_ocref_clr" d="M180,560 H925 V392 H945"/>
+        <path class="sig in v15only" data-t="tim_ocref_clr" d="M925,492 H945"/>
+        <text class="lab" x="700" y="554">tim_ocref_clr_int</text>
+
+        <!-- 刹车输入 -->
+        <path class="sig in" data-t="tim_sys_brk" d="M180,600 H252"/>
+        <path class="sig in" data-t="tim_bkin" d="M180,620 H252"/>
+        <path class="sig in" data-t="tim_brk_cmp" d="M180,640 H252"/>
+
+        <!-- IRQ / DMA -->
+        <path class="sig irq" data-t="tim_it" d="M224,140 H180"/>
+        <text class="lab" x="186" y="134">tim_it</text>
+        <path class="sig clk" data-t="tim_pclk" d="M180,196 H198"/>
+        <path class="sig bus" data-t="tim_pclk" d="M210,166 H224" stroke-dasharray="2 2"/>
+        <path class="sig bus" data-t="tim_pclk" d="M210,480 H224" stroke-dasharray="2 2"/>
+        <path class="sig dma" data-t="tim_cc1_dma" d="M224,472 H180"/>
+        <path class="sig dma" data-t="tim_upd_dma" d="M224,490 H180"/>
+        <path class="sig dma v15only" data-t="tim_trg_dma" d="M224,508 H180"/>
+        <path class="sig dma v15only" data-t="tim_com_dma" d="M224,526 H180"/>
       </svg>
+
     </div>
     <div class="dgm-legend">
       <span><i style="background:#38d0e0"></i>时钟</span>
@@ -506,7 +547,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
       <span><i style="background:#7dd3fc"></i>总线</span>
     </div>
     <div class="dgm-foot">
-      说明：本图为 Figure 675 的拓扑重绘，用于讲解不追求几何一致；<b>tim_itr[15:0]</b> 是内部触发输入（仅 TIM15），与全局中断 <b>tim_it</b> 不是一回事。
+      说明：本图按 Figure 675 拓扑重绘，信号名与方向已对照 <b>RM0456 Table 571（p.2344）</b>核对；<b>tim_itr[15:0]</b> 是内部触发输入（仅 TIM15），与全局中断 <b>tim_it</b> 不是一回事。TIM16/17 会隐藏从模式、TS、TRGO 与 CH2 相关部分。
     </div>
   </section>
 
@@ -543,7 +584,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
   </aside>
 </div>
 
-<div class="drawer open" id="drawer">
+<div class="drawer" id="drawer">
   <div class="drawer-tabs">
     <button class="dtab on" data-tab="gloss">术语表 · 信号与缩写</button>
     <button class="dtab" data-tab="deliver">信号出货清单</button>
@@ -551,7 +592,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
     <button class="dtab" data-tab="code">参考代码</button>
     <span class="grow"></span>
     <span class="src">RM0456 Rev 5 §56.4 · 中文版页码</span>
-    <button class="btn" id="drawerToggle">收起</button>
+    <button class="btn" id="drawerToggle">展开</button>
   </div>
   <div class="drawer-panes">
     <div class="pane on" id="pane-gloss">
@@ -1287,6 +1328,7 @@ let waveH = 196;
 function fitCanvas(){
   const cv = $('#wave');
   const rect = cv.getBoundingClientRect();
+  if(rect.width < 40) return;
   const dpr = window.devicePixelRatio || 1;
   cv.width = Math.max(320, Math.floor(rect.width * dpr));
   cv.height = Math.floor(196 * dpr);
@@ -1299,6 +1341,7 @@ function drawWave(){
   if(!cv) return;
   const ctx = cv.getContext('2d');
   const W = cv.width / (window.devicePixelRatio||1);
+  if(W < 80) return;
   const H = 196;
   const L = 40, R = 8, T = 8, B = 8;
   const plotW = W - L - R;
@@ -1705,6 +1748,21 @@ function updateStat(){
     (c.sms !== 'off' ? '<span class="f '+(r.trgi?'on':'')+'">TRGI</span>' : '');
 }
 
+/* 框图缩放 / 专注模式 */
+const VBW = 1240;
+function applyZoom(z){
+  const svg = $('#bdiag');
+  if(z === 'fit'){
+    svg.style.width = '100%';
+    svg.style.minWidth = '740px';
+  }else{
+    const w = Math.round(VBW * parseFloat(z));
+    svg.style.width = w + 'px';
+    svg.style.minWidth = w + 'px';
+  }
+  $$('.dgm-head [data-zoom]').forEach(b=> b.classList.toggle('on', b.dataset.zoom === String(z)));
+}
+
 function openDrawer(open){
   const d = $('#drawer');
   d.classList.toggle('open', open !== undefined ? open : !d.classList.contains('open'));
@@ -1730,6 +1788,20 @@ function init(){
   renderDelivery();
   bindDiagram();
   fitCanvas();
+
+  /* 框图缩放 / 专注 */
+  applyZoom('fit');
+  $$('.dgm-head [data-zoom]').forEach(b=>{
+    b.addEventListener('click', ()=> applyZoom(b.dataset.zoom));
+  });
+  $('#btnFocus').addEventListener('click', ()=>{
+    const m = $('.main');
+    m.classList.toggle('focus');
+    const on = m.classList.contains('focus');
+    $('#btnFocus').classList.toggle('on', on);
+    $('#btnFocus').textContent = on ? '退出专注' : '专注框图';
+    setTimeout(()=>{ fitCanvas(); drawWave(); }, 100);
+  });
 
   /* 设备切换 */
   $$('.btn.dev').forEach(b=> b.addEventListener('click', ()=> setDevice(b.dataset.dev)));
@@ -1862,3 +1934,4 @@ else boot();
 </script>
 </body>
 </html>
+
