@@ -472,10 +472,10 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <text class="lab v15only" x="558" y="438">tim_ic2</text>
 
         <!-- CNT 比较 -->
-        <path class="sig evt" data-t="CC1IF" d="M680,344 V360"/>
-        <path class="sig evt v15only" data-t="CC2IF" d="M735,332 H775 V472 H760"/>
-        <text class="lab" x="686" y="354">CC1</text>
-        <text class="lab v15only" x="788" y="420" transform="rotate(-90 788,420)">CC2</text>
+        <path class="sig evt" data-t="CC1I" d="M680,344 V360"/>
+        <path class="sig evt v15only" data-t="CC2I" d="M735,332 H775 V472 H760"/>
+        <text class="lab" x="686" y="354">CC1I</text>
+        <text class="lab v15only" x="788" y="420" transform="rotate(-90 788,420)">CC2I</text>
 
         <!-- UEV -->
         <path class="sig evt" data-t="UEV" d="M700,300 V286 H770"/>
@@ -490,9 +490,8 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
         <text class="lab v15only" x="912" y="248" transform="rotate(-90 912,248)" text-anchor="middle">Reset / Enable / Up</text>
 
         <!-- 比较事件送触发器 -->
-        <path class="sig evt v15only" data-t="CC1IF" d="M760,382 H830 V80 H860"/>
-        <path class="sig evt v15only" data-t="CC2IF" d="M760,472 H845 V94 H860"/>
-        <text class="lab v15only" x="812" y="250" transform="rotate(-90 812,250)">CC1I / CC2I</text>
+        <path class="sig evt v15only" data-t="CC1I" d="M760,382 H830 V80 H860"/>
+        <path class="sig evt v15only" data-t="CC2I" d="M760,472 H845 V94 H860"/>
 
         <!-- 输出链 -->
         <path class="sig out" data-t="tim_oc1ref" d="M760,376 H870"/>
@@ -669,8 +668,10 @@ const TERMS = [
 {id:'tim_ocref_clr_int',a:'tim_ocref_clr_int',en:'Internal OCREF clear',zh:'内部 OCREF 清除',t:'evt',from:'OCREF clear 选择/滤波',to:'输出控制',u:'tim_ocref_clr 经过选择与滤波后的内部版本。',n:'RM0456 p.2376'},
 {id:'UEV',a:'UEV',en:'Update event',zh:'更新事件',t:'evt',from:'计数器溢出/下溢、EGR.UG、从模式复位',to:'影子寄存器更新、重复计数器、UIF、TRGO(MMS=010)、DMA',u:'“提交时刻”：PSC/ARR/CCR 的预装载值在 UEV 搬运到影子寄存器，保证波形不撕裂。',n:'RM0456 p.2352'},
 {id:'UIF',a:'UIF',en:'Update interrupt flag',zh:'更新中断标志',t:'irq',from:'SR 寄存器 bit0',to:'IRQ interface → NVIC（UIE=1 时）',u:'每个更新事件置 1；写 0 清除。中断服务里常用来做周期任务。',n:'RM0456 p.2394'},
-{id:'CC1IF',a:'CC1IF',en:'Capture/compare 1 interrupt flag',zh:'捕获/比较 1 中断标志',t:'irq',from:'SR bit1',to:'NVIC / DMA（CC1IE / CC1DE）',u:'捕获到值时置位；输出模式下比较匹配时置位。',n:'RM0456 p.2394'},
-{id:'CC2IF',a:'CC2IF',en:'Capture/compare 2 interrupt flag',zh:'捕获/比较 2 中断标志',t:'irq',from:'SR bit2',to:'NVIC / DMA',u:'第二通道事件标志；仅 TIM15。',n:'RM0456 p.2394',d:'15'},
+{id:'CC1IF',a:'CC1IF',en:'Capture/compare 1 interrupt flag',zh:'捕获/比较 1 中断标志',t:'irq',from:'SR bit1（由内部 CC1I 事件置位）',to:'NVIC / DMA（CC1IE / CC1DE）',u:'捕获到值时置位；输出模式下比较匹配时置位。它是“标志”，不是图上的 CC1I 事件线。',n:'RM0456 p.2394'},
+{id:'CC2IF',a:'CC2IF',en:'Capture/compare 2 interrupt flag',zh:'捕获/比较 2 中断标志',t:'irq',from:'SR bit2（由内部 CC2I 事件置位）',to:'NVIC / DMA',u:'第二通道事件标志；仅 TIM15。与 CC2I 事件线不是同一个信号。',n:'RM0456 p.2394',d:'15'},
+{id:'CC1I',a:'CC1I',en:'Capture/compare 1 event',zh:'捕获/比较 1 事件',t:'evt',from:'CNT 与 CCR1 比较匹配，或捕获边沿',to:'Trigger controller（MMS=011 比较脉冲）',u:'内部事件脉冲：比较匹配/捕获发生时产生，送触发控制器；MMS=011 时由它在 tim_trgo 上发出一个正脉冲，同时置起 CC1IF。',n:'图 675 / RM0456 p.2390'},
+{id:'CC2I',a:'CC2I',en:'Capture/compare 2 event',zh:'捕获/比较 2 事件',t:'evt',from:'CNT 与 CCR2 比较匹配，或捕获边沿',to:'Trigger controller',u:'第二通道的内部事件，作用同 CC1I；仅 TIM15。',n:'图 675 / RM0456 p.2390',d:'15'},
 {id:'BIF',a:'BIF',en:'Break interrupt flag',zh:'刹车中断标志',t:'irq',from:'SR bit7',to:'NVIC（BIE=1）',u:'刹车事件发生即置位，用于故障记录与恢复判断。',n:'RM0456 p.2394'},
 {id:'SBIF',a:'SBIF',en:'System break interrupt flag',zh:'系统刹车中断标志',t:'irq',from:'Break circuitry（图中画出）',to:'中断逻辑',u:'图 675 中出现的系统刹车标志；注意 TIM15_SR 的 bit15:11 为保留，未定义该位，实际以 BIF 反映刹车。',n:'RM0456 p.2394',d:'15'},
 {id:'CC1OF',a:'CC1OF',en:'Capture/compare 1 over-capture flag',zh:'捕获 1 溢出标志',t:'bit',from:'SR bit9',to:'软件读取',u:'上一次捕获值还没被读走又发生新捕获时置位，提示数据丢失。',n:'RM0456 p.2394'},
@@ -766,7 +767,7 @@ const SCENES = [
   {t:'TI1 从引脚进入',d:'GPIO 复用为 TIM15_CH1，信号经 AF 进入 <code>tim_ti1_in</code>。把 <code>CCMR1.CC1S=01</code> 后通道 1 切到输入模式，输出通路被断开。',run:0,hi:['tim_ti1_in','ti1f']},
   {t:'数字滤波：IC1F + CKD',d:'<code>CKD</code> 先给滤波器定采样时基 <code>t_DTS</code>；<code>IC1F</code> 再选采样点数 N。只有连续 N 个采样都相同才认为电平有效，窄于 N×t_DTS 的毛刺被吃掉。',run:12,cfg:{ckd:1},hi:['ti1f','IC1F','CKD']},
   {t:'边沿检测与 IC1 预分频',d:'<code>CC1P</code> 选上升/下降沿；<code>IC1PSC</code> 设为 2 分频时，每 2 个有效边沿才输出一次 <code>tim_ic1</code>。',run:20,hi:['tim_ti1f_ed','ic1ps','tim_ic1']},
-  {t:'捕获：当前 CNT 锁存进 CCR1',d:'<code>tim_ic1</code> 到来时，硬件把当前 CNT 复制到 CCR1 并置 <code>CC1IF</code>。两次捕获值之差就是一个信号周期，与软件延迟无关。',run:40,hi:['tim_ic1','CC1IF','CCR1','ccr1'],regs:['SR.CC1IF','DIER.CC1IE']},
+  {t:'捕获：当前 CNT 锁存进 CCR1',d:'<code>tim_ic1</code> 到来时，硬件把当前 CNT 复制到 CCR1，产生一次捕获事件 <code>CC1I</code> 并置起 <code>CC1IF</code>。两次捕获值之差就是一个信号周期，与软件延迟无关。',run:40,hi:['tim_ic1','CC1I','CC1IF','CCR1'],regs:['SR.CC1IF','DIER.CC1IE']},
   {t:'换算频率',d:'捕获差值 ΔCCR=20（示例），则信号周期 = ΔCCR × (PSC+1) / f_CK。若 f_CK=16 MHz、PSC=0，则 f = 800 kHz。',run:14,hi:['tim_cc1_dma','tim_it']}
  ],
  code:'/* STM32CubeU5 HAL：输入捕获，测 TIM15_CH1 的周期 */\nTIM_IC_InitTypeDef sConfigIC = {0};\n\nsConfigIC.ICPolarity  = TIM_ICPOLARITY_RISING;\nsConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;\nsConfigIC.ICPrescaler = TIM_ICPSC_DIV1;\nsConfigIC.ICFilter    = 8;              /* 8 个采样投票 */\n\nHAL_TIM_IC_ConfigChannel(&htim15, &sConfigIC, TIM_CHANNEL_1);\nHAL_TIM_IC_Start_IT(&htim15, TIM_CHANNEL_1);\n\nvoid HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)\n{\n  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {\n    uint32_t v = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);\n    /* period = v - last; f = f_TIM / ((PSC+1) * period) */\n  }\n}'},
@@ -851,7 +852,7 @@ const SCENES = [
  steps:[
   {t:'MMS 决定 TRGO 的内容',d:'<code>CR2.MMS[2:0]</code> 从本定时器内部挑一个事件送到 <code>tim_trgo</code>，再接到别的定时器的 ITR、ADC 触发或 DMA 请求。',run:0,hi:['MMS','tim_trgo','trigger_controller']},
   {t:'MMS=000 复位 / 001 使能',d:'000：软件写 UG 时输出一个 TRGO 脉冲；001：TRGO 直接等于 CEN 电平。前者用于“命令复位”，后者用于“同开同关”。',run:10,cfg:{mms:'reset'},hi:['UG','tim_trgo','CEN']},
-  {t:'MMS=010 更新 / 011 比较脉冲',d:'010：每次 UEV 产生 TRGO 脉冲，适合周期同步；011：CC1IF 时产生脉冲，适合“比较点对齐”。',run:20,cfg:{mms:'compare'},hi:['UEV','CC1IF','tim_trgo']},
+  {t:'MMS=010 更新 / 011 比较脉冲',d:'010：每次 UEV 产生 TRGO 脉冲，适合周期同步；011：捕获/比较事件 <code>CC1I</code> 到来时在 TRGO 上发一个正脉冲，同时置起 <code>CC1IF</code>，适合“比较点对齐”。',run:20,cfg:{mms:'compare'},hi:['UEV','CC1I','tim_trgo']},
   {t:'MMS=100/101：OC1REFC / OC2REFC',d:'把经 OCREF clear 逻辑后的 <code>tim_oc1refc</code> 或 <code>tim_oc2refc</code> 送到 TRGO（手册 p.2390），常用于级联 PWM 或给 ADC 提供采样窗口。',run:18,cfg:{mms:'oc1ref'},hi:['tim_oc1ref','tim_trgo']},
   {t:'TIM16/17 没有主模式',d:'手册 p.2385：只有一个通道的定时器不支持主模式（CR2.MMS 保留），但 <code>tim_oc1</code> 仍可作为触发源去触发别的外设。',run:0,hi:['tim_oc1']}
  ],
