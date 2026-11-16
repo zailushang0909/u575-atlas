@@ -570,7 +570,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
       <div class="gwrap" id="deliverWrap"></div>
     </div>
     <div class="pane" id="pane-regs">
-      <div class="gbar"><span class="mini">位域按真实 bit 绘制，橙色 = 当前场景相关；点击任一位域看全称</span><span class="gcount" id="regNote"></span></div>
+      <div class="gbar"><span class="mini">位域按真实 bit 绘制，高位在左（31 → 0）；橙色 = 当前场景相关，点击任一位域看全称</span><span class="gcount" id="regNote"></span></div>
       <div class="regwrap" id="regWrap"></div>
     </div>
     <div class="pane" id="pane-code">
@@ -1433,12 +1433,14 @@ function renderRegs(){
     head.innerHTML = '<b>'+reg.name+'</b><span class="off">'+reg.off+'</span><span class="d">'+reg.desc+'</span>';
     box.appendChild(head);
 
+    /* 与手册一致：高位在左，行内从高到低；32 位寄存器第一行 31–16，第二行 15–0 */
     const rows = reg.w > 16 ? 2 : 1;
     for(let row=0; row<rows; row++){
-      const base = row*16;
+      const rowHi = (reg.w > 16 && row === 0) ? 31 : 15;
+      const rowLo = rowHi - 15;
       const bits = document.createElement('div'); bits.className = 'bits';
       for(let i=0;i<16;i++){
-        const d = document.createElement('div'); d.className = 'bit'; d.textContent = base+i;
+        const d = document.createElement('div'); d.className = 'bit'; d.textContent = rowHi - i;
         bits.appendChild(d);
       }
       box.appendChild(bits);
@@ -1448,13 +1450,14 @@ function renderRegs(){
         /* 数据按 ST 手册写法 b:[高位, 低位] */
         const hiBit = Math.max(f.b[0], f.b[1]);
         const loBit = Math.min(f.b[0], f.b[1]);
-        if(hiBit < base || loBit > base+15) return;
-        const b0 = Math.max(loBit, base), b1 = Math.min(hiBit, base+15);
+        if(hiBit < rowLo || loBit > rowHi) return;
+        const b0 = Math.max(loBit, rowLo), b1 = Math.min(hiBit, rowHi);
         const span = b1 - b0 + 1;
         const d = document.createElement('div');
         const isHi = hi.has(reg.name + '.' + f.n);
         d.className = 'fld' + (isHi ? ' hi' : '');
-        d.style.gridColumn = (b0-base+1) + ' / span ' + span;
+        /* 第 1 列对应 rowHi，位号越大越靠左 */
+        d.style.gridColumn = (rowHi - b1 + 1) + ' / span ' + span;
         d.textContent = f.n;
         d.title = f.n + '（bit' + (hiBit === loBit ? hiBit : hiBit + ':' + loBit) + '）：' + f.d;
         d.dataset.reg = reg.name; d.dataset.fld = f.n;
