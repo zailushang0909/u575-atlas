@@ -657,11 +657,11 @@ const TERMS = [
 {id:'DMAR',a:'DMAR',en:'DMA address for full transfer',zh:'DMA 全传输地址寄存器',t:'reg',from:'APB 总线 / DMA',to:'DMA burst 目标',u:'DMA burst 时指向被读写的寄存器组。',n:'偏移 0x3E0'},
 {id:'TISEL',a:'TISEL',en:'TIMx input selection register',zh:'输入选择寄存器',t:'reg',from:'APB 总线',to:'TI1/TI2 输入多路选择',u:'选择 TI1/TI2 来自哪个引脚或内部源。',n:'偏移 0x5C'},
 {id:'AF1AF2',a:'AF1 / AF2',en:'Alternate function registers 1/2',zh:'复用功能寄存器 1/2',t:'reg',from:'APB 总线',to:'刹车极性、OCREF 清除源等',u:'AF1 配置 BKIN/BKINP 等，AF2 配置 OCRSEL（OCREF clear 源）等。',n:'偏移 0x60 / 0x64'},
-{id:'SMS',a:'SMS',en:'Slave mode selection',zh:'从模式选择',t:'bit',from:'SMCR[3:0]',to:'从模式控制器',u:'0000 关，0100 复位，0101 门控，0110 触发，0111 外部时钟 1，1000 复位+触发，1001 门控+复位。',n:'RM0456 p.2391',d:'15'},
-{id:'TS',a:'TS',en:'Trigger selection',zh:'触发源选择',t:'bit',from:'SMCR[6:4] / [20:16]',to:'TRGI 多路选择器',u:'选择 ITR0–10、ITR12–15、TI1F_ED、TI1FP1、TI2FP2 作为 tim_trgi。',n:'RM0456 p.2391',d:'15'},
-{id:'MMS',a:'MMS',en:'Master mode selection',zh:'主模式选择',t:'bit',from:'CR2[6:4]',to:'TRGO 多路选择器',u:'000 复位(UG)、001 使能(CEN)、010 更新(UEV)、011 比较脉冲(CC1IF)、100 OC1REF、101 OC2REF。',n:'RM0456 p.2390',d:'15'},
+{id:'SMS',a:'SMS',en:'Slave mode selection',zh:'从模式选择',t:'bit',from:'SMCR bit16(SMS[3]) + bit2:0(SMS[2:0])',to:'从模式控制器',u:'0000 关，0100 复位，0101 门控，0110 触发，0111 外部时钟 1，1000 复位+触发，1001 门控+复位。',n:'RM0456 p.2391',d:'15'},
+{id:'TS',a:'TS',en:'Trigger selection',zh:'触发源选择',t:'bit',from:'SMCR bit21:20(TS[4:3]) + bit6:4(TS[2:0])',to:'TRGI 多路选择器',u:'选择 ITR0–10、ITR12–15、TI1F_ED、TI1FP1、TI2FP2 作为 tim_trgi；编码 00111 保留。',n:'RM0456 p.2391',d:'15'},
+{id:'MMS',a:'MMS',en:'Master mode selection',zh:'主模式选择',t:'bit',from:'CR2[6:4]',to:'TRGO 多路选择器',u:'000 复位(UG)、001 使能(CNT_EN)、010 更新(UEV)、011 比较脉冲(CC1IF)、100 OC1REFC、101 OC2REFC。',n:'RM0456 p.2390',d:'15'},
 {id:'MSM',a:'MSM',en:'Master/slave mode',zh:'主从同步模式',t:'bit',from:'SMCR[7]',to:'从模式控制器',u:'置 1 时，触发输入与本地启动被同步，避免从定时器提前一个周期启动。',n:'RM0456 p.2391',d:'15'},
-{id:'SMSPE',a:'SMSPE / SMSP',en:'SMS preload enable / SMS preload',zh:'从模式选择预装载',t:'bit',from:'SMCR[24]/[25]',to:'SMS 影子逻辑',u:'让 SMS 的修改在下一个更新事件生效，避免运行中改模式造成毛刺。',n:'RM0456 p.2391',d:'15'},
+{id:'SMSPE',a:'SMSPE',en:'SMS preload enable',zh:'SMS 预装载使能',t:'bit',from:'SMCR[24]',to:'SMS 影子逻辑',u:'让 SMS 的修改在下一个更新事件生效，避免运行中改模式造成毛刺；SMCR 中没有独立的 SMSP 值位。',n:'RM0456 p.2391',d:'15'},
 {id:'OPM',a:'OPM',en:'One-pulse mode',zh:'单脉冲模式',t:'bit',from:'CR1[3]',to:'计数控制',u:'置 1 后计数器在下一次 UEV 自动清 CEN，只输出一个脉冲/PWM 周期。',n:'RM0456 p.2379'},
 {id:'ARPE',a:'ARPE',en:'Auto-reload preload enable',zh:'自动重装预装载使能',t:'bit',from:'CR1[7]',to:'ARR 影子寄存器',u:'1 = 写入 ARR 先进预装载，UEV 时生效；0 = 立即生效。',n:'RM0456 p.2389'},
 {id:'OCPE',a:'OCxPE',en:'Output compare x preload enable',zh:'输出比较预装载使能',t:'bit',from:'CCMR1[3] / [11]',to:'CCRx 影子寄存器',u:'1 = CCR 写入在 UEV 生效，保证 PWM 占空比切换不撕裂。',n:'RM0456 p.2398'},
@@ -799,7 +799,7 @@ const SCENES = [
  trigi:'square', regs:['SMCR.SMS','SMCR.TS'],
  steps:[
   {t:'SMS=1000：复位 + 触发',d:'上升沿先把 CNT 清零（复位），同时把 CEN 置 1（触发）。等于“每次事件都重新开始计时”，适合周期测量的起始沿。',run:20,hi:['SMS','tim_trgi','CNT']},
-  {t:'SMS=1001：门控 + 复位',d:'高电平期间计数，上升沿时额外把计数器清零。与纯门控的区别是：每次开门都从 0 重新计。',run:24,hi:['SMS','tim_trgi','cnt']},
+  {t:'SMS=1001：门控 + 复位',d:'高电平期间计数；触发变<b>低</b>时计数器停止并清零（手册 p.2392）。与纯门控的区别是：每次关门都会把计数值抹掉，下次开门从 0 开始。',run:24,hi:['SMS','tim_trgi','cnt']},
   {t:'怎么选',d:'要“每次事件重新计时”选复位+触发；要“只统计高电平宽度且每次从零开始”选门控+复位。',run:12,hi:['slave_controller']}
  ],
  code:'/* 组合模式 */\nsConfig.SlaveMode = TIM_SLAVEMODE_COMBINED_RESETTRIGGER;\n/* 或 TIM_SLAVEMODE_COMBINED_GATEDRESET */\nsConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);'},
@@ -811,7 +811,7 @@ const SCENES = [
   {t:'MMS 决定 TRGO 的内容',d:'<code>CR2.MMS[2:0]</code> 从本定时器内部挑一个事件送到 <code>tim_trgo</code>，再接到别的定时器的 ITR、ADC 触发或 DMA 请求。',run:0,hi:['MMS','tim_trgo','trigger_controller']},
   {t:'MMS=000 复位 / 001 使能',d:'000：软件写 UG 时输出一个 TRGO 脉冲；001：TRGO 直接等于 CEN 电平。前者用于“命令复位”，后者用于“同开同关”。',run:10,cfg:{mms:'reset'},hi:['UG','tim_trgo','CEN']},
   {t:'MMS=010 更新 / 011 比较脉冲',d:'010：每次 UEV 产生 TRGO 脉冲，适合周期同步；011：CC1IF 时产生脉冲，适合“比较点对齐”。',run:20,cfg:{mms:'compare'},hi:['UEV','CC1IF','tim_trgo']},
-  {t:'MMS=100/101：OC1REF / OC2REF',d:'直接把 <code>tim_oc1ref</code> 或 <code>tim_oc2ref</code> 送到 TRGO，常用于级联 PWM 或给 ADC 提供采样窗口。',run:18,cfg:{mms:'oc1ref'},hi:['tim_oc1ref','tim_trgo']},
+  {t:'MMS=100/101：OC1REFC / OC2REFC',d:'把经 OCREF clear 逻辑后的 <code>tim_oc1refc</code> 或 <code>tim_oc2refc</code> 送到 TRGO（手册 p.2390），常用于级联 PWM 或给 ADC 提供采样窗口。',run:18,cfg:{mms:'oc1ref'},hi:['tim_oc1ref','tim_trgo']},
   {t:'TIM16/17 没有主模式',d:'手册 p.2385：只有一个通道的定时器不支持主模式（CR2.MMS 保留），但 <code>tim_oc1</code> 仍可作为触发源去触发别的外设。',run:0,hi:['tim_oc1']}
  ],
  code:'/* TIM15 更新事件作为 TIM3 的从触发源 */\nmasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;  /* MMS=010 */\nmasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;\nHAL_TIMEx_MasterConfigSynchronization(&htim15, &masterConfig);\n\n/* TIM3 侧：SlaveMode=TRIGGER, InputTrigger=TIM_TS_ITR0 */'},
@@ -864,18 +864,17 @@ const SCENES = [
    2. 寄存器位域定义
    ============================================================ */
 const REGS = [
-{name:'CR1',off:'0x00',desc:'控制寄存器 1',w:32,fields:[
+{name:'CR1',off:'0x00',desc:'控制寄存器 1（16 位）',w:16,fields:[
  {b:[0,0],n:'CEN',d:'计数器使能',val:()=>S.cfg.cen?1:0},
- {b:[1,1],n:'UDIS',d:'禁止更新事件'},
- {b:[2,2],n:'URS',d:'更新请求源选择'},
+ {b:[1,1],n:'UDIS',d:'更新事件禁用'},
+ {b:[2,2],n:'URS',d:'更新请求源（0=溢出/UG/从模式，1=仅溢出）'},
  {b:[3,3],n:'OPM',d:'单脉冲模式',val:()=>S.cfg.opm?1:0},
- {b:[4,4],n:'DIR',d:'计数方向（TIM15/16/17 只支持向上）'},
- {b:[6,5],n:'CMS',d:'中心对齐模式（本系列保留）'},
  {b:[7,7],n:'ARPE',d:'自动重装预装载使能',val:()=>S.cfg.arpe?1:0},
- {b:[9,8],n:'CKD',d:'时钟分频（滤波器/死区时基）',val:()=>S.cfg.ckd||0},
- {b:[11,11],n:'UIFREMAP',d:'UIF 重映射到 bit31'}
+ {b:[9,8],n:'CKD',d:'时钟分频，决定滤波器与死区的 t_DTS',val:()=>S.cfg.ckd||0},
+ {b:[11,11],n:'UIFREMAP',d:'UIF 复制到 CNT[31]'},
+ {b:[12,12],n:'DITHEN',d:'抖动使能（仅 CEN=0 时可改）'}
 ]},
-{name:'CR2',off:'0x04',desc:'控制寄存器 2',w:32,fields:[
+{name:'CR2',off:'0x04',desc:'控制寄存器 2（16 位）',w:16,fields:[
  {b:[0,0],n:'CCPC',d:'预装载控制（捕获/比较）'},
  {b:[2,2],n:'CCUS',d:'捕获/比较更新选择'},
  {b:[3,3],n:'CCDS',d:'捕获/比较 DMA 选择'},
@@ -885,33 +884,36 @@ const REGS = [
  {b:[9,9],n:'OIS1N',d:'OC1N 空闲电平'},
  {b:[10,10],n:'OIS2',d:'OC2 空闲电平（TIM15）'}
 ]},
-{name:'SMCR',off:'0x08',desc:'从模式控制寄存器（TIM15 专有）',w:32,fields:[
- {b:[3,0],n:'SMS',d:'从模式选择',val:()=>smsVal()},
- {b:[6,4],n:'TS',d:'触发源选择',val:()=>tsVal()},
+{name:'SMCR',off:'0x08',desc:'从模式控制寄存器（TIM15 专有，32 位）',w:32,fields:[
+ {b:[[16,16],[2,0]],n:'SMS',d:'从模式选择（bit16=SMS[3]，bit2:0=SMS[2:0]）',val:()=>smsVal()},
+ {b:[[21,20],[6,4]],n:'TS',d:'触发源选择（bit21:20=TS[4:3]，bit6:4=TS[2:0]）',val:()=>tsVal()},
  {b:[7,7],n:'MSM',d:'主从同步模式'},
- {b:[24,24],n:'SMSPE',d:'SMS 预装载使能'},
- {b:[25,25],n:'SMSP',d:'SMS 预装载值'}
+ {b:[24,24],n:'SMSPE',d:'SMS 预装载使能'}
 ]},
-{name:'CCMR1',off:'0x18',desc:'捕获/比较模式寄存器 1',w:32,fields:[
- {b:[1,0],n:'CC1S',d:'通道 1 方向（00 输出 / 01 输入）',val:()=>S.cfg.cc1s==='in'?1:0},
+{name:'CCMR1',off:'0x18',desc:'捕获/比较模式寄存器 1（同一个寄存器，按 CCxS 切换输入/输出含义）',w:32,fields:[
+ {b:[1,0],n:'CC1S',d:'通道 1 方向（00 输出 / 01 输入 TI1）',val:()=>S.cfg.cc1s==='in'?1:0},
  {b:[3,2],n:'IC1PSC',d:'输入捕获 1 预分频'},
  {b:[7,4],n:'IC1F',d:'输入捕获 1 滤波'},
- {b:[6,4],n:'OC1M',d:'输出比较 1 模式（110=PWM1）',val:()=>S.cfg.ocm||0},
+ {b:[2,2],n:'OC1FE',d:'输出比较 1 快速使能'},
  {b:[3,3],n:'OC1PE',d:'CCR1 预装载使能'},
+ {b:[[16,16],[6,4]],n:'OC1M',d:'输出比较 1 模式（bit16=OC1M[3]，bit6:4=OC1M[2:0]；110=PWM1）',val:()=>S.cfg.ocm||0},
+ {b:[7,7],n:'OC1CE',d:'tim_ocref_clr 清除使能'},
  {b:[9,8],n:'CC2S',d:'通道 2 方向',val:()=>S.cfg.cc2s==='in'?1:0},
  {b:[11,10],n:'IC2PSC',d:'输入捕获 2 预分频'},
  {b:[15,12],n:'IC2F',d:'输入捕获 2 滤波'},
- {b:[14,12],n:'OC2M',d:'输出比较 2 模式'}
+ {b:[10,10],n:'OC2FE',d:'输出比较 2 快速使能'},
+ {b:[11,11],n:'OC2PE',d:'CCR2 预装载使能'},
+ {b:[[24,24],[14,12]],n:'OC2M',d:'输出比较 2 模式（bit24=OC2M[3]，bit14:12=OC2M[2:0]）'},
+ {b:[15,15],n:'OC2CE',d:'tim_ocref_clr 清除使能 2'}
 ]},
-{name:'CCER',off:'0x20',desc:'捕获/比较使能寄存器',w:32,fields:[
+{name:'CCER',off:'0x20',desc:'捕获/比较使能寄存器（16 位）',w:16,fields:[
  {b:[0,0],n:'CC1E',d:'CC1 输出/捕获使能',val:()=>S.cfg.cc1e?1:0},
  {b:[1,1],n:'CC1P',d:'CC1 极性'},
  {b:[2,2],n:'CC1NE',d:'CC1N 互补输出使能',val:()=>S.cfg.cc1ne?1:0},
  {b:[3,3],n:'CC1NP',d:'CC1N 极性'},
  {b:[4,4],n:'CC2E',d:'CC2 使能',val:()=>S.cfg.cc2e?1:0},
  {b:[5,5],n:'CC2P',d:'CC2 极性'},
- {b:[6,6],n:'CC2NE',d:'CC2N（TIM15 保留）'},
- {b:[7,7],n:'CC2NP',d:'CC2N 极性'}
+ {b:[7,7],n:'CC2NP',d:'CC2 互补极性（bit6 保留，TIM15 无 CC2N 引脚）'}
 ]},
 {name:'BDTR',off:'0x44',desc:'刹车与死区寄存器',w:32,fields:[
  {b:[7,0],n:'DTG',d:'死区时间发生器',val:()=>S.cfg.dtg||0},
@@ -923,44 +925,52 @@ const REGS = [
  {b:[14,14],n:'AOE',d:'自动输出使能',val:()=>S.cfg.aoe?1:0},
  {b:[15,15],n:'MOE',d:'主输出使能',val:()=>S.rt.moe?1:0},
  {b:[19,16],n:'BKF',d:'刹车滤波'},
+ {b:[26,26],n:'BKDSRM',d:'刹车 DMA/中断请求屏蔽'},
  {b:[28,28],n:'BKBID',d:'双向刹车'}
 ]},
-{name:'DIER',off:'0x0C',desc:'DMA/中断使能寄存器',w:32,fields:[
+{name:'DIER',off:'0x0C',desc:'DMA/中断使能寄存器（16 位）',w:16,fields:[
  {b:[0,0],n:'UIE',d:'更新中断使能'},
  {b:[1,1],n:'CC1IE',d:'CC1 中断使能'},
  {b:[2,2],n:'CC2IE',d:'CC2 中断使能'},
  {b:[5,5],n:'COMIE',d:'换相中断使能'},
+ {b:[6,6],n:'TIE',d:'触发中断使能'},
  {b:[7,7],n:'BIE',d:'刹车中断使能'},
  {b:[8,8],n:'UDE',d:'更新 DMA 使能'},
  {b:[9,9],n:'CC1DE',d:'CC1 DMA 使能'},
- {b:[10,10],n:'CC2DE',d:'CC2 DMA 使能'},
- {b:[15,15],n:'BDE',d:'刹车 DMA 使能'}
+ {b:[13,13],n:'COMDE',d:'换相 DMA 使能'},
+ {b:[14,14],n:'TDE',d:'触发 DMA 使能'}
 ]},
-{name:'SR',off:'0x10',desc:'状态寄存器',w:32,fields:[
+{name:'SR',off:'0x10',desc:'状态寄存器（16 位）',w:16,fields:[
  {b:[0,0],n:'UIF',d:'更新中断标志',val:()=>S.rt.uif?1:0},
  {b:[1,1],n:'CC1IF',d:'捕获/比较 1 标志',val:()=>S.rt.cc1if?1:0},
  {b:[2,2],n:'CC2IF',d:'捕获/比较 2 标志',val:()=>S.rt.cc2if?1:0},
+ {b:[5,5],n:'COMIF',d:'换相中断标志'},
+ {b:[6,6],n:'TIF',d:'触发中断标志'},
  {b:[7,7],n:'BIF',d:'刹车中断标志',val:()=>S.rt.bif?1:0},
  {b:[9,9],n:'CC1OF',d:'捕获 1 溢出标志'},
  {b:[10,10],n:'CC2OF',d:'捕获 2 溢出标志'}
 ]},
-{name:'EGR',off:'0x14',desc:'事件产生寄存器',w:32,fields:[
+{name:'EGR',off:'0x14',desc:'事件产生寄存器（16 位）',w:16,fields:[
  {b:[0,0],n:'UG',d:'软件产生更新事件'},
  {b:[1,1],n:'CC1G',d:'软件产生捕获/比较 1 事件'},
  {b:[2,2],n:'CC2G',d:'软件产生捕获/比较 2 事件'},
  {b:[5,5],n:'COMG',d:'软件产生换相事件'},
+ {b:[6,6],n:'TG',d:'软件产生触发事件'},
  {b:[7,7],n:'BG',d:'软件产生刹车事件'}
 ]},
-{name:'CNT',off:'0x24',desc:'计数器',w:16,fields:[{b:[15,0],n:'CNT',d:'当前计数值',val:()=>S.rt.cnt}]},
-{name:'PSC',off:'0x28',desc:'预分频器',w:16,fields:[{b:[15,0],n:'PSC',d:'分频比 = PSC+1',val:()=>S.cfg.psc}]},
-{name:'ARR',off:'0x2C',desc:'自动重装寄存器',w:16,fields:[{b:[15,0],n:'ARR',d:'计数周期 = ARR+1',val:()=>S.cfg.arr}]},
-{name:'RCR',off:'0x30',desc:'重复计数器',w:16,fields:[{b:[7,0],n:'REP',d:'每 REP+1 个周期一次 UEV',val:()=>S.cfg.rcr}]},
-{name:'CCR1',off:'0x34',desc:'捕获/比较 1',w:16,fields:[{b:[15,0],n:'CCR1',d:'捕获值 / 比较值',val:()=>S.cfg.cc1s==='in'?S.rt.ccr1Cap:S.cfg.ccr1}]},
-{name:'CCR2',off:'0x38',desc:'捕获/比较 2（TIM15）',w:16,fields:[{b:[15,0],n:'CCR2',d:'第二通道捕获/比较值',val:()=>S.cfg.cc2s==='in'?S.rt.ccr2Cap:S.cfg.ccr2}]},
+{name:'CNT',off:'0x24',desc:'计数器（32 位寻址，计数值 16 位）',w:32,fields:[
+ {b:[15,0],n:'CNT',d:'当前计数值',val:()=>S.rt.cnt},
+ {b:[31,31],n:'UIFCPY',d:'UIF 的只读副本（UIFREMAP=1 时）',val:()=>S.rt.uif?1:0}
+]},
+{name:'PSC',off:'0x28',desc:'预分频器（16 位）',w:16,fields:[{b:[15,0],n:'PSC',d:'分频比 = PSC+1',val:()=>S.cfg.psc}]},
+{name:'ARR',off:'0x2C',desc:'自动重装寄存器（ARR[19:0]，非抖动模式高 4 位为 0）',w:32,fields:[{b:[19,0],n:'ARR',d:'计数周期 = ARR+1',val:()=>S.cfg.arr}]},
+{name:'RCR',off:'0x30',desc:'重复计数器（16 位）',w:16,fields:[{b:[7,0],n:'REP',d:'每 REP+1 个周期一次 UEV',val:()=>S.cfg.rcr}]},
+{name:'CCR1',off:'0x34',desc:'捕获/比较 1（CCR1[19:0]）',w:32,fields:[{b:[19,0],n:'CCR1',d:'捕获值 / 比较值',val:()=>S.cfg.cc1s==='in'?S.rt.ccr1Cap:S.cfg.ccr1}]},
+{name:'CCR2',off:'0x38',desc:'捕获/比较 2（TIM15，CCR2[19:0]）',w:32,fields:[{b:[19,0],n:'CCR2',d:'第二通道捕获/比较值',val:()=>S.cfg.cc2s==='in'?S.rt.ccr2Cap:S.cfg.ccr2}]},
 {name:'DCR',off:'0x3DC',desc:'DMA 控制寄存器',w:32,fields:[
  {b:[4,0],n:'DBA',d:'DMA 基地址偏移'},
  {b:[12,8],n:'DBL',d:'burst 传输长度'},
- {b:[18,16],n:'DBSS',d:'burst 源选择'}
+ {b:[19,16],n:'DBSS',d:'burst 源选择'}
 ]},
 {name:'DMAR',off:'0x3E0',desc:'DMA 全传输地址',w:32,fields:[{b:[31,0],n:'DMAR',d:'burst 访问的寄存器地址',val:()=>0x40014034}]}
 ];
@@ -1026,6 +1036,7 @@ function oneTick(){
   r.trgiPrev = r.trgi;
   r.trgi = trigLevel();
   const rise = r.trgi && !r.trgiPrev;
+  const fall = !r.trgi && r.trgiPrev;
 
   /* 刹车 */
   if(c.bke && c.bkin && r.moe){
@@ -1053,7 +1064,8 @@ function oneTick(){
       if(rise){ r.cnt = 0; r.pscAcc = 0; r.rep = c.rcr; c.cen = true; commitUEV(); }
       break;
     case 'gatedreset':
-      if(rise){ r.cnt = 0; r.pscAcc = 0; commitUEV(); }
+      /* 手册：触发变低时计数器停止并复位（不是在上升沿清零） */
+      if(fall){ r.cnt = 0; r.pscAcc = 0; }
       count = c.cen && r.trgi;
       break;
   }
@@ -1407,7 +1419,10 @@ function smsVal(){
   return {off:0,reset:4,gated:5,trigger:6,extclk:7,resett:8,gatedreset:9}[S.cfg.sms] || 0;
 }
 function tsVal(){
-  const m = {itr0:0,itr1:1,itr2:2,itr3:3,itr4:4,itr5:5,itr7:7,itr8:8,itr9:9,itr10:10,itr12:16,itr13:17,itr14:18,itr15:19,ti1f_ed:4,ti1fp1:5,ti2fp2:6};
+  /* TS[4:0] 编码：0–3=ITR0–3，4=TI1F_ED，5=TI1FP1，6=TI2FP2，8–14=ITR4–10，16–19=ITR12–15 */
+  const m = {itr0:0,itr1:1,itr2:2,itr3:3,ti1f_ed:4,ti1fp1:5,ti2fp2:6,
+             itr4:8,itr5:9,itr6:10,itr7:11,itr8:12,itr9:13,itr10:14,
+             itr12:16,itr13:17,itr14:18,itr15:19};
   return m[S.cfg.ts] !== undefined ? m[S.cfg.ts] : 0;
 }
 function fieldVisible(f, reg){
@@ -1447,30 +1462,37 @@ function renderRegs(){
       const fields = document.createElement('div'); fields.className = 'fields';
       reg.fields.forEach(f=>{
         if(!fieldVisible(f, reg)) return;
-        /* 数据按 ST 手册写法 b:[高位, 低位] */
-        const hiBit = Math.max(f.b[0], f.b[1]);
-        const loBit = Math.min(f.b[0], f.b[1]);
-        if(hiBit < rowLo || loBit > rowHi) return;
-        const b0 = Math.max(loBit, rowLo), b1 = Math.min(hiBit, rowHi);
-        const span = b1 - b0 + 1;
-        const d = document.createElement('div');
-        const isHi = hi.has(reg.name + '.' + f.n);
-        d.className = 'fld' + (isHi ? ' hi' : '');
-        /* 第 1 列对应 rowHi，位号越大越靠左 */
-        d.style.gridColumn = (rowHi - b1 + 1) + ' / span ' + span;
-        d.textContent = f.n;
-        d.title = f.n + '（bit' + (hiBit === loBit ? hiBit : hiBit + ':' + loBit) + '）：' + f.d;
-        d.dataset.reg = reg.name; d.dataset.fld = f.n;
-        const v = f.val ? f.val() : null;
-        if(v) d.classList.add('v1');
-        fields.appendChild(d);
+        /* 数据按 ST 手册写法 b:[高位, 低位]；不连续的位域写成 [[高,低],[高,低]]（如 SMS[3] + SMS[2:0]） */
+        const segs = Array.isArray(f.b[0]) ? f.b : [f.b];
+        segs.forEach(seg=>{
+          const hiBit = Math.max(seg[0], seg[1]);
+          const loBit = Math.min(seg[0], seg[1]);
+          if(hiBit < rowLo || loBit > rowHi) return;
+          const b0 = Math.max(loBit, rowLo), b1 = Math.min(hiBit, rowHi);
+          const span = b1 - b0 + 1;
+          const d = document.createElement('div');
+          const isHi = hi.has(reg.name + '.' + f.n);
+          d.className = 'fld' + (isHi ? ' hi' : '');
+          /* 第 1 列对应 rowHi，位号越大越靠左 */
+          d.style.gridColumn = (rowHi - b1 + 1) + ' / span ' + span;
+          d.textContent = segs.length > 1
+            ? f.n + '[' + (hiBit === loBit ? hiBit : hiBit + ':' + loBit) + ']'
+            : f.n;
+          d.title = f.n + '（bit' + (hiBit === loBit ? hiBit : hiBit + ':' + loBit) + '）：' + f.d;
+          d.dataset.reg = reg.name; d.dataset.fld = f.n;
+          const v = f.val ? f.val() : null;
+          if(v) d.classList.add('v1');
+          fields.appendChild(d);
+        });
       });
       box.appendChild(fields);
     }
     wrap.appendChild(box);
   });
   const note = $('#regNote');
-  if(note) note.textContent = S.device === 'TIM15' ? 'TIM15 · 18 个寄存器' : S.device + ' · 无 SMCR / CCR2';
+  if(note) note.textContent = S.device === 'TIM15'
+    ? 'TIM15 · ' + REGS.length + ' 个寄存器 · 已按 RM0456 §56.7 核对'
+    : S.device + ' · 无 SMCR / CCR2';
 }
 
 /* 术语表 */
