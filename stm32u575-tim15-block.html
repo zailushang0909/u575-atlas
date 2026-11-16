@@ -757,7 +757,7 @@ const SCENES = [
   {t:'CEN=1，CNT 开始向上计数',d:'软件置 <code>CR1.CEN=1</code>。此后 CNT 每来一个 <code>tim_cnt_ck</code> 加 1，到 ARR 后回 0。',run:26,cfg:{cen:true},hi:['CEN','CNT','cnt','tim_cnt_ck']},
   {t:'溢出 → UEV → UIF → 中断',d:'CNT 从 ARR 回 0 时产生 <b>UEV</b>：预装载值搬入影子寄存器、重复计数器复位、<b>UIF</b> 置 1。若 <code>DIER.UIE=1</code>，UIF 经 IRQ interface 汇总成 <code>tim_it</code> 送 NVIC。',run:18,hi:['UEV','UIF','tim_it','irq_if'],regs:['DIER.UIE','SR.UIF']}
  ],
- code:'/* 1 kHz 更新中断：f_CK=16 MHz，PSC=15，ARR=999 */\nh tim15.Instance = TIM15;\nhtim15.Init.Prescaler = 15;\nhtim15.Init.CounterMode = TIM_COUNTERMODE_UP;\nhtim15.Init.Period = 999;\nhtim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;\nhtim15.Init.RepetitionCounter = 0;\nhtim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;\nHAL_TIM_Base_Init(&htim15);\nHAL_TIM_Base_Start_IT(&htim15);   /* CEN=1 + UIE=1 */\n\nvoid TIM15_IRQHandler(void){ HAL_TIM_IRQHandler(&htim15); }\nvoid HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *h){\n  if (h->Instance == TIM15) { /* 每 1 ms 执行一次 */ }\n}'},
+ code:'/* STM32CubeU5 HAL：1 kHz 更新中断（f_TIM=16 MHz，PSC=15，ARR=999） */\nTIM_HandleTypeDef htim15;\n\n__HAL_RCC_TIM15_CLK_ENABLE();\n\nhtim15.Instance = TIM15;\nhtim15.Init.Prescaler = 15;\nhtim15.Init.CounterMode = TIM_COUNTERMODE_UP;\nhtim15.Init.Period = 999;\nhtim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;\nhtim15.Init.RepetitionCounter = 0;\nhtim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;\nif (HAL_TIM_Base_Init(&htim15) != HAL_OK) { Error_Handler(); }\n\nHAL_TIM_Base_Start_IT(&htim15);   /* CEN=1 + UIE=1 */\n\nvoid TIM15_IRQHandler(void) { HAL_TIM_IRQHandler(&htim15); }\n\nvoid HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)\n{\n  if (htim->Instance == TIM15) {\n    /* 每 1 ms 执行一次 */\n  }\n}'},
 
 {id:'capture', grp:'输入', name:'输入捕获', sub:'TI1 → 滤波 → 边沿 → CCR1', dev:'15',
  cfg:{psc:0,arr:65535,ccr1:0,ccr2:0,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'in',cc2s:'in',ocm:0,moe:1,dtg:0,arpe:1},
@@ -769,7 +769,7 @@ const SCENES = [
   {t:'捕获：当前 CNT 锁存进 CCR1',d:'<code>tim_ic1</code> 到来时，硬件把当前 CNT 复制到 CCR1 并置 <code>CC1IF</code>。两次捕获值之差就是一个信号周期，与软件延迟无关。',run:40,hi:['tim_ic1','CC1IF','CCR1','ccr1'],regs:['SR.CC1IF','DIER.CC1IE']},
   {t:'换算频率',d:'捕获差值 ΔCCR=20（示例），则信号周期 = ΔCCR × (PSC+1) / f_CK。若 f_CK=16 MHz、PSC=0，则 f = 800 kHz。',run:14,hi:['tim_cc1_dma','tim_it']}
  ],
- code:'/* 输入捕获：测 TIM15_CH1 上升沿周期 */\nsConfig.IC1Polarity = TIM_IC_POLARITY_RISING;\nsConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;\nsConfig.IC1Prescaler = TIM_ICPSC_DIV1;\nsConfig.IC1Filter = 8;              /* 8 个采样投票 */\nHAL_TIM_IC_ConfigChannel(&htim15, &sConfig, TIM_CHANNEL_1);\nHAL_TIM_IC_Start_IT(&htim15, TIM_CHANNEL_1);\n\n/* 回调里读两次捕获值算频率 */\nvoid HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *h){\n  uint32_t v = HAL_TIM_ReadCapturedValue(h, TIM_CHANNEL_1);\n  /* period = v - last; f = f_CK / ((PSC+1) * period) */\n}'},
+ code:'/* STM32CubeU5 HAL：输入捕获，测 TIM15_CH1 的周期 */\nTIM_IC_InitTypeDef sConfigIC = {0};\n\nsConfigIC.ICPolarity  = TIM_ICPOLARITY_RISING;\nsConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;\nsConfigIC.ICPrescaler = TIM_ICPSC_DIV1;\nsConfigIC.ICFilter    = 8;              /* 8 个采样投票 */\n\nHAL_TIM_IC_ConfigChannel(&htim15, &sConfigIC, TIM_CHANNEL_1);\nHAL_TIM_IC_Start_IT(&htim15, TIM_CHANNEL_1);\n\nvoid HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)\n{\n  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {\n    uint32_t v = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);\n    /* period = v - last; f = f_TIM / ((PSC+1) * period) */\n  }\n}'},
 
 {id:'pwm', grp:'输出', name:'PWM + 死区 + 互补', sub:'CCR → OCREF → DTG → OC1/OC1N', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:3,arpe:1,cc1e:1,cc1ne:1,cc2e:1},
@@ -781,7 +781,7 @@ const SCENES = [
   {t:'死区插入：OC1 与 OC1N 不同时导通',d:'<code>DTG[7:0]</code> 把上升沿延后 t_DTG。设 DTG=3，OC1 变低后要等 3 个 t_DTS，OC1N 才变高；反之亦然。这个间隙就是死区。',run:30,hi:['DTG','dtg','tim_oc1n','tim_oc1']},
   {t:'观察互补波形与占空比',d:'OC1 与 OC1N 严格互补且带死区；ARR 改变周期、CCR1 改变占空比，两者互不影响（PWM 模式 1）。',run:30,hi:['tim_oc1','tim_oc1n','tim_oc2']}
  ],
- code:'/* TIM15 CH1/CH1N：10 kHz PWM，50% 占空比，死区 100 ns */\nhtim15.Init.Prescaler = 0;\nhtim15.Init.Period = 1599;          /* 16 MHz / 1600 = 10 kHz */\nHAL_TIM_PWM_Init(&htim15);\n\nsConfig.OCMode = TIM_OCMODE_PWM1;\nsConfig.Pulse = 800;                /* 50% */\nsConfig.OCNPolarity = TIM_OCNPOLARITY_HIGH;\nsConfig.OCIdleState = TIM_OCIDLESTATE_RESET;\nsConfig.OCNIdleState = TIM_OCNIDLESTATE_RESET;\nHAL_TIM_PWM_ConfigChannel(&htim15, &sConfig, TIM_CHANNEL_1);\n\n__HAL_TIM_MOE_ENABLE(&htim15);      /* BDTR.MOE=1 */\nHAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_1);\nHAL_TIMEx_ComplPWM_Start(&htim15, TIM_CHANNEL_1);\n/* 死区由 BDTR.DTG 设置，HAL 用 sBreakDeadTimeConfig.DeadTime */'},
+ code:'/* STM32CubeU5 HAL：TIM15 CH1/CH1N，10 kHz PWM，50% 占空比 */\nTIM_OC_InitTypeDef sConfigOC = {0};\n\nhtim15.Init.Prescaler = 0;\nhtim15.Init.Period = 1599;           /* 16 MHz / 1600 = 10 kHz */\nif (HAL_TIM_PWM_Init(&htim15) != HAL_OK) { Error_Handler(); }\n\nsConfigOC.OCMode       = TIM_OCMODE_PWM1;\nsConfigOC.Pulse        = 800;        /* 50% */\nsConfigOC.OCPolarity   = TIM_OCPOLARITY_HIGH;\nsConfigOC.OCNPolarity  = TIM_OCNPOLARITY_HIGH;\nsConfigOC.OCFastMode   = TIM_OCFAST_DISABLE;\nsConfigOC.OCIdleState  = TIM_OCIDLESTATE_RESET;\nsConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;\nHAL_TIM_PWM_ConfigChannel(&htim15, &sConfigOC, TIM_CHANNEL_1);\n\n__HAL_TIM_ENABLE_OC1PRELOAD(&htim15);          /* CCMR1.OC1PE=1 */\n\nHAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_1);\nHAL_TIMEx_PWMN_Start(&htim15, TIM_CHANNEL_1); /* 互补输出并使能 MOE */\n\n/* 死区用 HAL_TIMEx_ConfigBreakDeadTime() 的 DeadTime 字段（BDTR.DTG） */'},
 
 {id:'opm', grp:'输出', name:'单脉冲 OPM', sub:'一个周期后自动停', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:1,cen:false,mms:'update',sms:'trigger',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:1,arpe:1,cc1e:1,cc1ne:1,cc2e:1},
@@ -792,7 +792,7 @@ const SCENES = [
   {t:'一个周期结束，CEN 自动清零',d:'CNT 到达 ARR 产生 UEV 的同时，硬件把 CEN 清 0。注意此时定时器并没有被复位，计数值停在 0，等待下一次启动条件。',run:26,hi:['UEV','CEN','cnt'],regs:['CR1.CEN']},
   {t:'典型用途',d:'超声波发射、单次精确延时、步进电机给一个脉冲、与外部事件对齐的“打一枪”。',run:0,hi:['tim_oc1']}
  ],
- code:'/* 单脉冲：TRGI 上升沿启动，输出一个 1 ms 脉冲 */\nhtim15.Init.Period = 15999;         /* 1 ms @16 MHz */\nhtim15.Init.OnePulseMode = TIM_OPMODE_SINGLE;\nsConfig.OCMode = TIM_OCMODE_PWM2;   /* 单脉冲常用 PWM2 */\nsConfig.Pulse = 8000;\nHAL_TIM_OnePulse_Init(&htim15, TIM_OPMODE_SINGLE);\nHAL_TIM_OnePulse_Start(&htim15, TIM_CHANNEL_1);\n/* 触发源：slaveConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER */'},
+ code:'/* STM32CubeU5 HAL：单脉冲，TRGI 上升沿启动，输出一个 1 ms 脉冲 */\nTIM_OC_InitTypeDef sConfigOC = {0};\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nhtim15.Init.Period = 15999;          /* 1 ms @16 MHz */\nhtim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;\nif (HAL_TIM_OnePulse_Init(&htim15, TIM_OPMODE_SINGLE) != HAL_OK) { Error_Handler(); }\n\nsConfigOC.OCMode       = TIM_OCMODE_PWM2;\nsConfigOC.Pulse        = 8000;\nsConfigOC.OCPolarity   = TIM_OCPOLARITY_HIGH;\nsConfigOC.OCNPolarity  = TIM_OCNPOLARITY_HIGH;\nsConfigOC.OCIdleState  = TIM_OCIDLESTATE_RESET;\nsConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;\nHAL_TIM_OnePulse_ConfigChannel(&htim15, &sConfigOC, TIM_CHANNEL_1, TIM_CHANNEL_1);\n\n/* 由 tim_trgi 上升沿启动 */\nsSlaveConfig.SlaveMode    = TIM_SLAVEMODE_TRIGGER;\nsSlaveConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_OnePulse_Start(&htim15, TIM_CHANNEL_1);'},
 
 {id:'sms_reset', grp:'从模式', name:'从模式 · 复位', sub:'SMS=0100', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'reset',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -803,7 +803,7 @@ const SCENES = [
   {t:'效果：从定时器被“对齐”',d:'从定时器的周期不再由自己决定，而是被主定时器的 TRGO 强制同步；适合多路 PWM 需要同相位启动的场合。',run:30,hi:['tim_ptr','CNT','cnt','UEV']},
   {t:'TS 可选源（TIM15）',d:'ITR0–5 = TIM1/2/3/4/5/8 的 TRGO，ITR7 = TIM16_OC1，ITR8 = TIM17_OC1；也可选 TI1F_ED、TI1FP1、TI2FP2。',run:0,hi:['tim_itr','ITR','tim_ti1fp1']}
  ],
- code:'/* 用 TIM3_TRGO 复位 TIM15 计数器 */\nsConfig.SlaveMode = TIM_SLAVEMODE_RESET;\nsConfig.InputTrigger = TIM_TS_ITR2;   /* ITR2 = TIM3_TRGO */\nsConfig.TriggerPolarity = TIM_TRIGGERPOLARITY_RISING;\nsConfig.TriggerFilter = 0;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);'},
+ code:'/* STM32CubeU5 HAL：用 TIM3_TRGO 复位 TIM15 计数器 */\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nsSlaveConfig.SlaveMode        = TIM_SLAVEMODE_RESET;\nsSlaveConfig.InputTrigger     = TIM_TS_ITR2;      /* ITR2 = TIM3_TRGO */\nsSlaveConfig.TriggerPolarity  = TIM_TRIGGERPOLARITY_RISING;\nsSlaveConfig.TriggerPrescaler = TIM_TRIGGERPRESCALER_DIV1;\nsSlaveConfig.TriggerFilter    = 0;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_Base_Start(&htim15);'},
 
 {id:'sms_gated', grp:'从模式', name:'从模式 · 门控', sub:'SMS=0101', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'gated',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -813,7 +813,7 @@ const SCENES = [
   {t:'观察计数被“夹断”',d:'TRGI 每次变低，CNT 保持；变高继续。因此 CNT 的增量正好等于门控高电平的时间。',run:36,hi:['tim_trgi','tim_cnt_ck','cnt']},
   {t:'用途：测量外部脉冲宽度',d:'把被测信号接到 TI1，SMS=门控，TS=TI1FP1，读 CNT 就得到高电平持续了多少个计数。',run:16,hi:['tim_ti1fp1','CNT']}
  ],
- code:'sConfig.SlaveMode = TIM_SLAVEMODE_GATED;\nsConfig.InputTrigger = TIM_TS_TI1FP1;   /* 外部信号门控 */\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);'},
+ code:'/* STM32CubeU5 HAL：门控模式，TI1FP1 高电平期间计数 */\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nsSlaveConfig.SlaveMode    = TIM_SLAVEMODE_GATED;\nsSlaveConfig.InputTrigger = TIM_TS_TI1FP1;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_Base_Start(&htim15);'},
 
 {id:'sms_trigger', grp:'从模式', name:'从模式 · 触发启动', sub:'SMS=0110', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:false,mms:'update',sms:'trigger',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -823,7 +823,7 @@ const SCENES = [
   {t:'上升沿到来，CEN 由硬件置位',d:'这一下是硬件完成的，软件不用写 CR1，因此启动时刻与外部事件严格对齐（没有中断延迟）。',run:14,hi:['CEN','tim_trc','tim_cnt_ck']},
   {t:'用途：多机同步启动',d:'一个主定时器 TRGO 同时触发多个从定时器，实现多路 PWM 同相位；也可用于事件到来才开始计时。',run:26,hi:['tim_itr','tim_trgo']}
  ],
- code:'sConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER;\nsConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);   /* 只是使能，等待触发沿 */'},
+ code:'/* STM32CubeU5 HAL：触发模式，TRGI 上升沿才启动计数 */\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nsSlaveConfig.SlaveMode    = TIM_SLAVEMODE_TRIGGER;\nsSlaveConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_Base_Start(&htim15);   /* 只是使能，等待触发沿 */'},
 
 {id:'sms_extclk', grp:'从模式', name:'从模式 · 外部时钟 1', sub:'SMS=0111', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'extclk',ts:'ti1fp1',cc1s:'in',cc2s:'in',ocm:0,moe:1,dtg:0,arpe:1},
@@ -833,7 +833,7 @@ const SCENES = [
   {t:'每个上升沿 CNT+1',d:'TRGI 的频率就是计数频率；计数器从脉冲计数器变成“事件计数器”。',run:40,hi:['tim_trgi','CNT','cnt']},
   {t:'用途：计脉冲个数',d:'流量计、编码器（单路）、外部时钟分频输出；配合捕获还能测外部脉冲频率。',run:14,hi:['tim_ti1fp1','CCR1']}
  ],
- code:'sConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;\nsConfig.InputTrigger = TIM_TS_TI1FP1;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);\nHAL_TIM_Base_Start(&htim15);\n/* PSC 仍可对外部时钟再分频 */'},
+ code:'/* STM32CubeU5 HAL：外部时钟模式 1，TRGI 每个上升沿 CNT+1 */\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nsSlaveConfig.SlaveMode    = TIM_SLAVEMODE_EXTERNAL1;\nsSlaveConfig.InputTrigger = TIM_TS_TI1FP1;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_Base_Start(&htim15);\n/* PSC 仍可对外部时钟再分频 */'},
 
 {id:'sms_combo', grp:'从模式', name:'从模式 · 组合模式', sub:'SMS=1000 / 1001', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'resett',ts:'itr2',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -843,7 +843,7 @@ const SCENES = [
   {t:'SMS=1001：门控 + 复位',d:'高电平期间计数；触发变<b>低</b>时计数器停止并清零（手册 p.2392）。与纯门控的区别是：每次关门都会把计数值抹掉，下次开门从 0 开始。',run:24,hi:['SMS','tim_trgi','cnt']},
   {t:'怎么选',d:'要“每次事件重新计时”选复位+触发；要“只统计高电平宽度且每次从零开始”选门控+复位。',run:12,hi:['slave_controller']}
  ],
- code:'/* 组合模式 */\nsConfig.SlaveMode = TIM_SLAVEMODE_COMBINED_RESETTRIGGER;\n/* 或 TIM_SLAVEMODE_COMBINED_GATEDRESET */\nsConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sConfig);'},
+ code:'/* STM32CubeU5 HAL：复位+触发 / 门控+复位 组合模式 */\nTIM_SlaveConfigTypeDef sSlaveConfig = {0};\n\nsSlaveConfig.SlaveMode    = TIM_SLAVEMODE_COMBINED_RESETTRIGGER;\n/* 或 TIM_SLAVEMODE_COMBINED_GATEDRESET */\nsSlaveConfig.InputTrigger = TIM_TS_ITR2;\nHAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig);\n\nHAL_TIM_Base_Start(&htim15);'},
 
 {id:'master', grp:'主模式', name:'主模式 MMS', sub:'TRGO 输出什么', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -855,7 +855,7 @@ const SCENES = [
   {t:'MMS=100/101：OC1REFC / OC2REFC',d:'把经 OCREF clear 逻辑后的 <code>tim_oc1refc</code> 或 <code>tim_oc2refc</code> 送到 TRGO（手册 p.2390），常用于级联 PWM 或给 ADC 提供采样窗口。',run:18,cfg:{mms:'oc1ref'},hi:['tim_oc1ref','tim_trgo']},
   {t:'TIM16/17 没有主模式',d:'手册 p.2385：只有一个通道的定时器不支持主模式（CR2.MMS 保留），但 <code>tim_oc1</code> 仍可作为触发源去触发别的外设。',run:0,hi:['tim_oc1']}
  ],
- code:'/* TIM15 更新事件作为 TIM3 的从触发源 */\nmasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;  /* MMS=010 */\nmasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;\nHAL_TIMEx_MasterConfigSynchronization(&htim15, &masterConfig);\n\n/* TIM3 侧：SlaveMode=TRIGGER, InputTrigger=TIM_TS_ITR0 */'},
+ code:'/* STM32CubeU5 HAL：主模式，把更新事件送到 tim_trgo */\nTIM_MasterConfigTypeDef sMasterConfig = {0};\n\nsMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;   /* MMS=010 */\nsMasterConfig.MasterSlaveMode     = TIM_MASTERSLAVEMODE_ENABLE;\nHAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig);\n\n/* 其它 MMS：TIM_TRGO_RESET / TIM_TRGO_ENABLE /\n   TIM_TRGO_OC1（比较脉冲）/ TIM_TRGO_OC1REF / TIM_TRGO_OC2REF */\n/* 从定时器侧：SlaveMode=TRIGGER，InputTrigger 选连到 TIM15_TRGO 的 ITR（Table 574） */'},
 
 {id:'break', grp:'安全', name:'刹车输入 Break', sub:'BKIN → MOE=0', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:3,arpe:1,cc1e:1,cc1ne:1,cc2e:1,bke:1,bkin:0,aoe:1,ossi:1},
@@ -867,7 +867,7 @@ const SCENES = [
   {t:'AOE=1：下一个 UEV 自动恢复',d:'AOE=0 时必须软件重新写 MOE；AOE=1 时刹车源消失后，硬件在下一个 UEV 自动把 MOE 置回 1，适合过流自动重启。',run:14,cfg:{bkin:0},hi:['AOE','MOE','UEV']},
   {t:'另外两路刹车源',d:'比较器刹车 <code>tim_brk_cmp</code>（COMP1/COMP2）适合模拟过流阈值；系统刹车 <code>tim_sys_brk</code> 来自 LOCKUP、PVD、ECC、CSS，属于芯片级安全。',run:0,hi:['tim_brk_cmp','tim_sys_brk','break_circuit']}
  ],
- code:'/* 刹车 + 死区 + 自动恢复 */\nsBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;\nsBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;\nsBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;\nsBreakDeadTimeConfig.DeadTime = 3;\nsBreakDeadTimeConfig.BreakState = TIM_BREAK_ENABLE;\nsBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;\nsBreakDeadTimeConfig.BreakFilter = 2;\nsBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;\nHAL_TIMEx_ConfigBreakDeadTime(&htim15, &sBreakDeadTimeConfig);'},
+ code:'/* STM32CubeU5 HAL：刹车 + 死区 + 自动恢复 */\nTIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};\n\nsBreakDeadTimeConfig.OffStateRunMode  = TIM_OSSR_ENABLE;\nsBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;\nsBreakDeadTimeConfig.LockLevel        = TIM_LOCKLEVEL_OFF;\nsBreakDeadTimeConfig.DeadTime         = 3;\nsBreakDeadTimeConfig.BreakState       = TIM_BREAK_ENABLE;\nsBreakDeadTimeConfig.BreakPolarity    = TIM_BREAKPOLARITY_HIGH;\nsBreakDeadTimeConfig.BreakFilter      = 2;\nsBreakDeadTimeConfig.AutomaticOutput  = TIM_AUTOMATICOUTPUT_ENABLE;\nHAL_TIMEx_ConfigBreakDeadTime(&htim15, &sBreakDeadTimeConfig);'},
 
 {id:'rep', grp:'基础', name:'重复计数器 RCR', sub:'n+1 个周期一次 UEV', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:2,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -877,7 +877,7 @@ const SCENES = [
   {t:'观察 UIF 变稀疏',d:'CNT 仍然每个周期溢出，但 UIF/中断只在第 3 次溢出时出现。这样可以把中断频率降到 1/3。',run:60,hi:['UIF','tim_it','CNT']},
   {t:'用途：N 周期 PWM / 降中断',d:'RCR 常用于生成 N 个周期为一组的 PWM（电机换相），或把高频中断压缩到 CPU 能承受的频率。',run:20,hi:['RCR','tim_cc1_dma']}
  ],
- code:'htim15.Init.RepetitionCounter = 2;   /* 每 3 个周期一次 UEV */\nHAL_TIM_Base_Init(&htim15);\n/* 注意：RCR 只在有重复计数器的 TIM 上有效 */'},
+ code:'/* STM32CubeU5 HAL：重复计数器，每 REP+1 = 3 个周期一次 UEV */\nhtim15.Init.RepetitionCounter = 2;\nif (HAL_TIM_Base_Init(&htim15) != HAL_OK) { Error_Handler(); }\n\nHAL_TIM_Base_Start_IT(&htim15);\n/* 运行中写 RCR 不会立即生效，要等下一次 UEV 才装载 */'},
 
 {id:'dmaburst', grp:'高级', name:'DMA burst', sub:'DCR + DMAR（图文）', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -887,7 +887,7 @@ const SCENES = [
   {t:'典型场景',d:'三相电机控制中，一个更新事件要同时刷新 CCR1、CCR2、CCR3 和 BDTR；burst 把这些写入打包，避免逐个写造成相位不一致。',run:0,hi:['tim_cc1_dma','DMAR','DCR']},
   {t:'代价与注意',d:'burst 期间会占用总线更久；DBA 必须按字对齐，DBL 超过实际寄存器数会读写到未定义地址，配置前请对照手册 p.2385。',run:0,hi:['dma_if']}
  ],
- code:'/* DMA burst：更新事件时连续写 CCR1/CCR2 */\nhdma.Init.PeriphInc = DMA_PINC_ENABLE;   /* burst 需要地址递增 */\n__HAL_TIM_ENABLE_DMA(&htim15, TIM_DMA_UPDATE);\nTIM15->DCR = (0x0u << TIM_DCR_DBA_Pos)   /* 基地址偏移 */\n           | (2u   << TIM_DCR_DBL_Pos)   /* 传输 2 个 16 位 */\n           | (0u   << TIM_DCR_DBSS_Pos);\nTIM15->DMAR = (uint32_t)&burstBuf[0];'},
+ code:'/* STM32CubeU5 HAL：DMA burst，更新事件时连续写 CCR1/CCR2 */\nuint32_t burstBuf[2] = { 800, 400 };\n\n/* 先由 CubeMX 生成 DMA 句柄并关联：\n   __HAL_LINKDMA(&htim15, hdma[TIM_DMA_ID_UPDATE], hdma_tim15_up); */\n\nHAL_TIM_DMABurst_WriteStart(&htim15,\n                            TIM_DMABASE_CCR1,               /* DBA：从 CCR1 起 */\n                            TIM_DMA_UPDATE,                 /* DBSS：更新事件触发 */\n                            burstBuf,\n                            TIM_DMABURSTLENGTH_2TRANSFERS);\n/* HAL 内部会填 DCR(DBA/DBL/DBSS) 并使能 DMAR 访问 */'},
 
 {id:'devices', grp:'对比', name:'TIM15 / 16 / 17 差异', sub:'能力矩阵', dev:'15',
  cfg:{psc:0,arr:9,ccr1:5,ccr2:3,rcr:0,opm:0,cen:true,mms:'update',sms:'off',cc1s:'out',cc2s:'out',ocm:6,moe:1,dtg:2,arpe:1},
@@ -897,7 +897,7 @@ const SCENES = [
   {t:'TIM16 / TIM17：单通道精简版',d:'只有 1 个通道，<b>没有 SMCR</b>（无从模式）、<b>没有 CCR2/CCMR2</b>、<b>没有 MMS</b>（无 tim_trgo）。保留互补输出、死区、刹车、重复计数器与 DMA burst。基址 0x4001 4400 / 0x4001 4800。',run:0,hi:['slave_controller','tim_trgo','tim_oc2']},
   {t:'切换设备看图',d:'点上方 TIM16 / TIM17：从模式控制器、MMS/TRGO、CH2 相关通路会<b>整块隐藏</b>并标注“硬件不存在”，而不是简单置灰。',run:0,hi:['m_slave','m_ccr2','tim_trgo']}
  ],
- code:'/* 三者的共同点 */\n/* 16 位向上计数、PSC 16 位、RCR 8 位、CH1 互补 + 死区 + 刹车 */\n/* 差异：TIM15 才有 SMCR / CCR2 / CCMR2 / MMS(TRGO) */\n/* TIM16/17 的 CR2[6:4] 为保留位 */'}
+ code:'/* STM32CubeU5 HAL 能力差异 */\n/* 三者共同：16 位向上计数、PSC 16 位、RCR 8 位、CH1 互补 + 死区 + 刹车 */\n/* TIM15 独有：SMCR（从模式）、CCR2/CCMR2（CH2）、CR2.MMS（TRGO） */\n/* TIM16/17：CR2[6:4] 保留，不要调用 HAL_TIMEx_MasterConfigSynchronization()\n   也不要配置 TIM_SLAVEMODE_*（没有 SMCR） */'}
 ];
 </script>
 <script>
@@ -1633,7 +1633,7 @@ function renderCode(){
   wrap.innerHTML = SCENES.map((s,i)=>(
     '<details class="codeblk"'+ (i===S.scene?' open':'') +'>'+
       '<summary>'+s.name+' · '+s.sub+'</summary>'+
-      '<pre></pre><div class="cap">HAL 示例按 U5 固件库命名，仅示意配置顺序与关键位；实际使用请对照 CubeMX 生成的初始化代码。</div>'+
+      '<pre></pre><div class="cap">以上均为 STM32CubeU5 HAL（stm32u5xx_hal_tim.c / stm32u5xx_hal_tim_ex.c）调用；省略了 CubeMX 生成的 MSP 时钟使能与错误处理，实际工程请以 CubeMX 初始化代码为准。</div>'+
     '</details>'
   )).join('');
   const pres = $$('#codeWrap pre');
