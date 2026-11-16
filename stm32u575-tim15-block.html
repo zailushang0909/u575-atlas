@@ -603,7 +603,7 @@ table.gt td .devbadge{font-family:var(--mono);font-size:8.6px;color:#ffcf9c;bord
     <div class="waves">
       <canvas id="wave"></canvas>
       <div class="wlegend" id="waveLegend"></div>
-      <div class="mini" style="padding:0 2px 5px;color:#5c7284;line-height:1.5">UIF / CC1IF / BIF 是保持型标志位：硬件置 1 后不会自动清零，必须软件写 0；点“清标志”可模拟清零。</div>
+      <div class="mini" style="padding:0 2px 5px;color:#5c7284;line-height:1.5">波形里的 UIF / CC1IF / BIF 画成短脉冲只为便于观察；实际它们置 1 后会保持，必须在中断里写 0 清除（可点“清标志”模拟）。</div>
       <button class="btn" id="btnSigNote" style="width:100%;margin-bottom:6px">本场景信号说明（每个波形的产生条件）</button>
     </div>
     <div class="statrow" id="statRow"></div>
@@ -1170,8 +1170,8 @@ function oneTick(){
   S.samples.push({
     cnt:r.cnt, arr:c.arr, ccr1:c.ccr1, ccr2:c.ccr2,
     oc1:r.oc1, oc1n:r.oc1n, oc2:r.oc2, trgi:r.trgi,
-    uif:r.uif?1:0, cc1if:r.cc1if?1:0,
-    bif:r.bif?1:0, trgo:r.trgo
+    uif:r.uifPulse>0?1:0, cc1if:r.cc1Pulse>0?1:0,
+    bif:r.bifPulse>0?1:0, trgo:r.trgo
   });
   if(S.samples.length > 480) S.samples.shift();
 }
@@ -1708,18 +1708,18 @@ function renderSignalNotes(){
   rows.push(['UIF', '更新中断标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.rcr > 0
-          ? `【标志位 0/1】每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。置 1 后<b>保持</b>，硬件不会自动清零，必须软件写 0；波形显示为保持电平。`
-          : '【标志位 0/1】每次 UEV 置 1；置 1 后<b>保持</b>，硬件不会自动清零，必须软件写 0（rc_w0）。UIE=1 才进 NVIC；波形显示为保持电平，可点“清标志”清零。')]);
+          ? `【标志位 0/1】每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。置 1 后<b>保持</b>，硬件不会自动清零，必须软件写 0；波形画成短脉冲只为便于观察。`
+          : '【标志位 0/1】每次 UEV 置 1；置 1 后<b>保持</b>，硬件不会自动清零，必须在中断里写 0（rc_w0）。UIE=1 才进 NVIC；波形画成短脉冲只为便于观察。')]);
 
   rows.push(['CC1IF', '捕获/比较 1 标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.cc1s === 'in'
-          ? '【标志位 0/1】TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位），置 1 后<b>保持</b>，需软件写 0 清除；若没清就再次捕获，还会置 CC1OF。'
-          : '【标志位 0/1】CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位），置 1 后<b>保持</b>，需软件写 0 清除；若 CC1IE=1 则进 NVIC。')]);
+          ? '【标志位 0/1】TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位），置 1 后<b>保持</b>，需在中断里写 0 清除；若没清就再次捕获，还会置 CC1OF。波形画成短脉冲只为便于观察。'
+          : '【标志位 0/1】CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位），置 1 后<b>保持</b>，需在中断里写 0 清除；若 CC1IE=1 则进 NVIC。波形画成短脉冲只为便于观察。')]);
 
   const bifOn = !!c.bke;
   rows.push(['BIF', '刹车中断标志', bifOn ? ON : OFF,
-    bifOn ? '【标志位 0/1】BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；置 1 后<b>保持</b>，需软件写 0 清除。AOE=1 时下一个 UEV 自动恢复 MOE。'
+    bifOn ? '【标志位 0/1】BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；置 1 后<b>保持</b>，需在中断里写 0 清除。AOE=1 时下一个 UEV 自动恢复 MOE。波形画成短脉冲只为便于观察。'
           : 'BKE=0：本场景不产生刹车事件']);
 
   const m = MMS_INFO[c.mms] || MMS_INFO.update;
