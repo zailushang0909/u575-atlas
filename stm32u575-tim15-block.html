@@ -744,7 +744,7 @@ const TERMS = [
 {id:'BKE',a:'BKE / BKP / AOE',en:'Break enable / polarity / auto output enable',zh:'刹车使能/极性/自动恢复',t:'bit',from:'BDTR[12]/[13]/[14]',to:'刹车电路',u:'BKE 打开刹车输入，BKP 选有效电平，AOE 决定刹车解除后是否自动恢复 MOE。',n:'RM0456 p.2407'},
 {id:'TI1S',a:'TI1S',en:'TI1 selection',zh:'TI1 输入选择',t:'bit',from:'CR2[7]',to:'XOR 组合逻辑',u:'置 1 时 TI1 = TI1 XOR TI2，用于正交/双信号合成一路计数。',n:'RM0456 p.2390'},
 {id:'IC1F',a:'IC1F / IC1PSC',en:'Input capture 1 filter / prescaler',zh:'捕获 1 滤波/预分频',t:'bit',from:'CCMR1[7:4] / [3:2]',to:'TI1 滤波器',u:'IC1F 选采样点数和采样频率；IC1PSC 每 2/4/8 个边沿才捕获一次。',n:'RM0456 p.2398'},
-{id:'OC1M',a:'OC1M',en:'Output compare 1 mode',zh:'输出比较 1 模式',t:'bit',from:'CCMR1[6:4]',to:'输出比较逻辑',u:'110 = PWM 模式 1（CNT<CCR1 有效），111 = PWM 模式 2；其他为冻结/匹配置位/翻转等。',n:'RM0456 p.2398'},
+{id:'OC1M',a:'OC1M',en:'Output compare 1 mode',zh:'输出比较 1 模式',t:'bit',from:'CCMR1[6:4]',to:'输出比较逻辑',u:'110 = PWM 模式 1（CNT&lt;CCR1 有效），111 = PWM 模式 2；其他为冻结/匹配置位/翻转等。',n:'RM0456 p.2398'},
 {id:'CEN',a:'CEN',en:'Counter enable',zh:'计数器使能',t:'bit',from:'CR1[0]',to:'计数控制',u:'置 1 开始计数；单脉冲模式下由硬件自动清零，也可被从模式触发置位。',n:'RM0456 p.2389'},
 {id:'UG',a:'UG',en:'Update generation',zh:'软件产生更新事件',t:'bit',from:'EGR[0]',to:'UEV 逻辑',u:'写 1 立即产生一次 UEV，常用于初始化时把预装载值搬进影子寄存器。',n:'RM0456 p.2395'},
 {id:'CKD',a:'CKD',en:'Clock division',zh:'时钟分频',t:'bit',from:'CR1[9:8]',to:'数字滤波器 / 死区时基',u:'给滤波器和死区提供 t_DTS = t_CK_INT × 1/2/4；不影响计数器节拍。',n:'RM0456 p.2389'},
@@ -1637,12 +1637,27 @@ function renderFilters(){
 
 /* ---------- 场景信号说明 ---------- */
 const MMS_INFO = {
-  reset:  ['000 复位（UG）', '软件写 EGR.UG，或从模式为复位模式时收到 TRGI 上升沿 → TRGO 输出一个脉冲。若复位来自触发输入，TRGO 比实际复位略有延迟。'],
-  enable: ['001 使能（CNT_EN）', 'TRGO 直接输出计数器使能电平：CEN=1 且（门控模式下 TRGI 为高）时为高；适合让多个定时器“同开同关”。'],
-  update: ['010 更新（UEV）', '计数器溢出/下溢产生 UEV 时输出一个脉冲；RCR>0 时每 REP+1 个计数周期才一次。适合作为从定时器的周期节拍。'],
-  compare:['011 比较脉冲（CC1I）', '发生捕获或比较匹配、产生 CC1I 事件时输出一个正脉冲（此时 CC1IF 将被置位）；适合“比较点对齐”。'],
-  oc1ref: ['100 OC1REFC', '直接输出 tim_oc1refc 电平（经 OCREF clear 后的通道 1 PWM 参考波），TRGO 跟随 PWM 高低。'],
-  oc2ref: ['101 OC2REFC', '直接输出 tim_oc2refc 电平（通道 2 的 PWM 参考波），TRGO 跟随 PWM 高低。']
+  reset:  ['000 复位', 'Reset (UG: Update Generation)', '脉冲',
+    '软件写 EGR.UG，或从模式为复位模式时收到 TRGI 上升沿 → TRGO 输出一个脉冲。若复位来自触发输入，TRGO 比实际复位略有延迟。用来让从定时器重新对齐。'],
+  enable: ['001 使能', 'Enable (CNT_EN)', '电平',
+    'TRGO 直接等于“计数器使能”电平：CEN=1 且（门控模式下 TRGI 为高）时为高，停止计数时为低。它是持续电平而不是脉冲，适合让多个定时器“同开同关”。'],
+  update: ['010 更新', 'Update (UEV: UPdate Event)', '脉冲',
+    '每次 UEV 输出一个脉冲。UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；RCR>0 时每 REP+1 个计数周期才一次。适合作为从定时器的周期节拍。'],
+  compare:['011 比较脉冲', 'Compare Pulse (CC1I: Capture/Compare 1 event)', '脉冲',
+    '发生捕获或比较匹配、产生 CC1I 事件时输出一个正脉冲（此时 CC1IF 将被置位，即使它已经是高电平也会发）。适合“比较点对齐”。'],
+  oc1ref: ['100 OC1REFC', 'Output Compare 1 REFerence after Clear', '电平',
+    'TRGO 直接等于 tim_oc1refc，是持续电平，不是脉冲。PWM 模式1 下 CNT&lt;CCR1 时为高、否则为低；频率=计数周期，占空比由 CCR1 决定，所以接收方看到的是与 CH1 PWM 同形状的方波。名字里的 C 表示经过 OCREF clear（逐周期限流）后的参考信号。'],
+  oc2ref: ['101 OC2REFC', 'Output Compare 2 REFerence after Clear', '电平',
+    'TRGO 直接等于 tim_oc2refc，同样是持续电平，不是脉冲。PWM 模式1 下 CNT&lt;CCR2 时为高、否则为低，频率与占空比跟随 CH2 的 PWM。如果接收方需要“边沿”，必须自己检测上升/下降沿。']
+};
+const SIG_EN = {
+  CNT:'Counter', OC1:'Output Compare 1', OC1N:'Output Compare 1 Complementary',
+  OC2:'Output Compare 2', TRGI:'Trigger Input', UIF:'Update Interrupt Flag',
+  CC1IF:'Capture/Compare 1 Interrupt Flag', BIF:'Break Interrupt Flag', TRGO:'Trigger Output'
+};
+const SIG_FORM = {
+  CNT:'计数值', OC1:'引脚电平', OC1N:'引脚电平', OC2:'引脚电平',
+  TRGI:'电平 / 边沿', UIF:'标志位', CC1IF:'标志位', BIF:'标志位', TRGO:'脉冲或电平'
 };
 const SMS_TEXT = {
   off:'从模式关闭', reset:'复位模式', gated:'门控模式', trigger:'触发模式',
@@ -1668,19 +1683,19 @@ function renderSignalNotes(){
   else if(c.sms === 'reset') cntCond = 'TRGI 上升沿把 CNT 与 PSC 清零，随后继续计数';
   else if(c.sms === 'resett') cntCond = 'TRGI 上升沿清零并启动计数';
   else cntCond = c.cen ? 'CEN=1，每个 tim_cnt_ck +1，到 ARR 回 0' : 'CEN=0，计数器停住';
-  rows.push(['CNT', '计数器当前值，波形的“时间轴”', ON, cntCond]);
+  rows.push(['CNT', '计数器计数值（0…ARR），波形的时间轴', ON, '【持续计数值】' + cntCond]);
 
   const oc1On = c.cc1s === 'out' && c.cc1e && c.moe;
-  rows.push(['OC1', '通道1 输出（PWM/比较波形）', oc1On ? ON : OFF,
-    oc1On ? `CCR1 与 CNT 比较（${ocm}），经 DTG/极性后送引脚` : 'CC1E=0 或 MOE=0：本场景不驱动引脚']);
+  rows.push(['OC1', '通道1 引脚上的实际方波', oc1On ? ON : OFF,
+    oc1On ? `【持续电平】CCR1 与 CNT 比较（${ocm}）得到方波，经 DTG/极性后送到引脚，不是短脉冲` : 'CC1E=0 或 MOE=0：本场景不驱动引脚']);
 
   const oc1nOn = c.cc1s === 'out' && c.cc1ne && c.moe;
-  rows.push(['OC1N', '通道1 互补输出', oc1nOn ? ON : OFF,
-    oc1nOn ? 'OC1 的互补波形，上升沿被 DTG 延后 t_DTG' : 'CC1NE=0：本场景不输出互补波形']);
+  rows.push(['OC1N', '通道1 互补引脚输出', oc1nOn ? ON : OFF,
+    oc1nOn ? '【持续电平】与 OC1 反相，两者之间插入 t_DTG 死区，所以不会同时有效' : 'CC1NE=0：本场景不输出互补波形']);
 
   const oc2On = is15 && c.cc2s === 'out' && c.cc2e && c.moe;
-  rows.push(['OC2', '通道2 输出', oc2On ? ON : OFF,
-    oc2On ? 'CCR2 与 CNT 比较（PWM1），无互补、无死区' : (is15 ? 'CC2E=0 或 MOE=0：本场景不驱动引脚' : 'TIM16/17 没有 CH2')]);
+  rows.push(['OC2', '通道2 引脚上的 PWM 方波', oc2On ? ON : OFF,
+    oc2On ? '【持续电平】CCR2 与 CNT 比较得到方波，无互补、无死区' : (is15 ? 'CC2E=0 或 MOE=0：本场景不驱动引脚' : 'TIM16/17 没有 CH2')]);
 
   const trgiOn = is15 && c.sms !== 'off';
   const lvl = c.trigiMode === 'manual' ? (r.manual ? '手动高' : '手动低') : '自动方波';
@@ -1691,36 +1706,39 @@ function renderSignalNotes(){
   rows.push(['UIF', '更新中断标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.rcr > 0
-          ? `每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。`
-          : '每次 UEV 置 1；UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。波形画成短脉冲便于观察。')]);
+          ? `【标志位 0/1】每 ${c.rcr + 1} 个计数周期才产生一次 UEV，届时 UIF=1。UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。`
+          : '【标志位 0/1】每次 UEV 置 1；UEV 来自计数器溢出/下溢、EGR.UG 或从模式复位；UIE=1 才进 NVIC。它不是引脚，波形画成短脉冲只为可视化。')]);
 
   rows.push(['CC1IF', '捕获/比较 1 标志', noTick ? OFF : ON,
     noTick ? '本场景不运行计数，不会产生'
       : (c.cc1s === 'in'
-          ? 'TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位）；若上次值未读又发生捕获，还会置 CC1OF。'
-          : 'CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位）；若 CC1IE=1 则进 NVIC。')]);
+          ? '【标志位 0/1】TI1 捕获边沿把 CNT 锁进 CCR1 时置 1（由内部 CC1I 事件置位）；若上次值未读又发生捕获，还会置 CC1OF。'
+          : '【标志位 0/1】CNT 与 CCR1 比较匹配时置 1（即使 CC1E=0 也会置位）；若 CC1IE=1 则进 NVIC。')]);
 
   const bifOn = !!c.bke;
   rows.push(['BIF', '刹车中断标志', bifOn ? ON : OFF,
-    bifOn ? 'BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；AOE=1 时下一个 UEV 自动恢复 MOE。'
+    bifOn ? '【标志位 0/1】BKE=1 且 BKIN 达到 BKP 选定电平（经 BKF 滤波），或系统刹车 / 比较器刹车有效 → tim_brk → BIF=1；AOE=1 时下一个 UEV 自动恢复 MOE。'
           : 'BKE=0：本场景不产生刹车事件']);
 
   const m = MMS_INFO[c.mms] || MMS_INFO.update;
   const mmsLine = Object.keys(MMS_INFO).map(k=>{
-    const on = c.mms === k;
-    return '<div style="margin:3px 0 3px 0;padding-left:7px;border-left:2px solid ' + (on ? '#ff9f45' : '#24333f')
-      + ';color:' + (on ? '#ffd9b0' : '#93a9bc') + ';line-height:1.6">'
-      + (on ? '● ' : '○ ') + '<b>' + MMS_INFO[k][0] + '</b>：' + MMS_INFO[k][1] + '</div>';
+    const on = c.mms === k, it = MMS_INFO[k];
+    return '<div style="margin:4px 0;padding:5px 7px;border-left:2px solid ' + (on ? '#ff9f45' : '#24333f')
+      + ';background:' + (on ? 'rgba(255,159,69,.06)' : 'transparent') + ';color:' + (on ? '#ffd9b0' : '#93a9bc')
+      + ';line-height:1.65"><b>' + (on ? '● ' : '○ ') + it[0] + '</b> <span class="mini">' + it[1]
+      + '</span> <span class="ty concept">' + it[2] + '</span><br>' + it[3] + '</div>';
   }).join('');
   rows.push(['TRGO', '主模式触发输出（MMS 选择）', is15 ? ON : OFF,
-    is15 ? `<b>本场景当前选择 ${m[0]}</b>：${m[1]}<div style="margin-top:5px">` + mmsLine + '</div>'
+    is15 ? `<b>本场景当前选择 ${m[0]}（${m[2]}）</b>：${m[3]}<div style="margin-top:5px">` + mmsLine + '</div>'
          : 'TIM16/17 没有 MMS/TRGO（硬件不存在）']);
 
   wrap.innerHTML = '<div class="deliv-note">场景：<b>' + sc().name + '</b> · 步骤 '
     + (S.step + 1) + '/' + sc().steps.length + ' — ' + sc().steps[S.step].t + '</div>'
-    + '<table class="gt"><thead><tr><th style="width:64px">信号</th><th style="width:180px">作用 / 控制什么</th>'
-    + '<th style="width:58px">本场景</th><th>产生条件 / 说明</th></tr></thead><tbody>'
-    + rows.map(x=> '<tr><td class="ab">' + x[0] + '</td><td>' + x[1] + '</td><td>' + x[2] + '</td><td>' + x[3] + '</td></tr>').join('')
+    + '<table class="gt"><thead><tr><th style="width:100px">信号</th><th style="width:170px">作用 / 控制什么</th>'
+    + '<th style="width:56px">本场景</th><th>产生条件 / 说明</th></tr></thead><tbody>'
+    + rows.map(x=> '<tr><td class="ab">' + x[0] + '<div class="mini" style="margin-top:2px;color:#5f7487">'
+        + (SIG_EN[x[0]] || '') + '</div></td><td>' + x[1] + '</td><td>' + x[2] + '</td><td>'
+        + '<span class="ty concept" style="margin-right:5px">' + (SIG_FORM[x[0]] || '') + '</span>' + x[3] + '</td></tr>').join('')
     + '</tbody></table>';
   const t = $('#sigScene');
   if(t) t.textContent = sc().name + ' · ' + (S.step + 1) + '/' + sc().steps.length;
