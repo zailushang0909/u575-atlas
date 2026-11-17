@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USART 串口控制器 · 框图与位级时序 · STM32U575</title>
+<style>
+:root{
+  --bg:#0a0e13; --panel:#101821; --line:#1e2a36; --line2:#263543;
+  --tx:#dce7f2; --mut:#8296aa; --dim:#586b7e;
+  --core:#38d0e0; --serial:#a78bfa; --pin:#fbbf24; --bus:#7dd3fc;
+  --irq:#a78bfa; --dma:#f87171; --err:#ff6b6b; --ok:#4ade80; --clk:#2dd4bf;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;color:var(--tx);font-family:var(--sans);font-size:13px;overflow:hidden;
+  display:flex;flex-direction:column;
+  background:radial-gradient(1100px 560px at 8% -8%,rgba(167,139,250,.07),transparent 60%),
+             radial-gradient(900px 520px at 92% -4%,rgba(45,212,191,.05),transparent 58%),var(--bg)}
+button{font-family:inherit;color:inherit}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(16,24,33,.97),rgba(10,14,19,.9));flex:0 0 auto}
+.logo{width:30px;height:30px;border-radius:8px;border:1px solid rgba(167,139,250,.42);display:grid;place-items:center;
+  background:linear-gradient(140deg,rgba(167,139,250,.22),rgba(167,139,250,.03));color:var(--serial);
+  font-family:var(--mono);font-size:9px;font-weight:700}
+.ttl h1{margin:0;font-size:15px;font-weight:650}
+.ttl span{font-size:11px;color:var(--mut)}
+.ttl span b{color:#cfe0ee;font-weight:600}
+.topchips{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--mut)}
+.chip.on{color:#d8ccff;border-color:rgba(167,139,250,.42);background:rgba(167,139,250,.09)}
+
+.toolbar{display:flex;align-items:center;gap:7px;padding:6px 16px;border-bottom:1px solid var(--line);
+  background:rgba(13,19,26,.75);flex:0 0 auto;flex-wrap:wrap;font-size:11px}
+.tb-lab{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-right:2px}
+.btn{appearance:none;border:1px solid var(--line2);background:#141d27;color:var(--mut);height:25px;padding:0 9px;
+  border-radius:6px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:5px;transition:.15s}
+.btn:hover{background:#1b2733;color:var(--tx)}
+.btn.on{color:#eee6ff;border-color:rgba(167,139,250,.5);background:rgba(167,139,250,.12)}
+.btn.dev.on{color:#d8ccff;border-color:rgba(167,139,250,.55);background:rgba(167,139,250,.12)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.sep{width:1px;height:18px;background:var(--line2);margin:0 3px}
+.tb-right{margin-left:auto;display:flex;gap:10px;align-items:center;color:var(--dim);font-family:var(--mono);font-size:10px}
+.tb-right b{color:#9fb3c6;font-weight:500}
+select{background:#0f1720;border:1px solid var(--line2);color:var(--tx);height:25px;border-radius:6px;
+  padding:0 6px;font-size:11px;outline:none;font-family:var(--mono);cursor:pointer}
+select:focus{border-color:rgba(167,139,250,.55)}
+
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(560px,1fr) 520px}
+
+/* ---------- 框图 ---------- */
+.dgm{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid var(--line);background:rgba(8,12,17,.35)}
+.dgm-head{display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid var(--line);font-size:10.5px;color:var(--mut)}
+.dgm-head b{color:#cbd5e1;font-weight:600;font-size:11px}
+.dgm-body{flex:1;min-height:0;overflow:auto;padding:8px 10px 4px;background:
+  linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px) 0 0/100% 28px,
+  linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px) 0 0/28px 100%}
+#bdiag{width:100%;height:auto;display:block;min-width:700px}
+#bdiag text{font-family:var(--sans);fill:#c9d9e7;font-size:10.5px;pointer-events:none}
+#bdiag .mname{font-size:10.2px;fill:#d6e5f2}
+#bdiag .msub{font-size:8.4px;fill:#8296aa}
+#bdiag .ext{font-family:var(--mono);font-size:9.8px;fill:#9fb6c9}
+#bdiag .lab{font-family:var(--mono);font-size:8.4px;fill:#87a0b5}
+#bdiag .frame{fill:none;stroke:#2a3a49;stroke-dasharray:3 3}
+.dgm-head .zoom{margin-left:auto;display:flex;gap:4px;align-items:center}
+.dgm-head .zoom .btn{height:22px;padding:0 7px;font-size:10px}
+.main.focus{grid-template-columns:1fr}
+.main.focus .console{display:none}
+#bdiag .mod rect{fill:#111b26;stroke:#2b3d4d;stroke-width:1;rx:3}
+#bdiag .mod{pointer-events:all;cursor:pointer}
+#bdiag .mod:hover rect{stroke:#4d6a80;fill:#15212d}
+#bdiag .mod.ctl rect{fill:#131e29}
+#bdiag .sig{fill:none;stroke:#425565;stroke-width:1.25;marker-end:url(#arw);pointer-events:stroke;cursor:pointer}
+#bdiag .sig.clk{stroke:#2d7c86}
+#bdiag .sig.in{stroke:#8a6c2a}
+#bdiag .sig.out{stroke:#8a5c2f}
+#bdiag .sig.irq{stroke:#6552a0}
+#bdiag .sig.dma{stroke:#8f4444}
+#bdiag .sig.evt{stroke:#3f7a55}
+#bdiag .sig.hot{stroke-width:2.5;stroke:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.55))}
+#bdiag .mod.hot rect{stroke:#fff;stroke-width:1.6;fill:#1b2a37}
+#bdiag.focus .sig{opacity:.16}
+#bdiag.focus .sig.hot{opacity:1}
+#bdiag.focus .mod{opacity:.45}
+#bdiag.focus .mod.hot{opacity:1}
+#bdiag .sim{fill:#fbbf24;stroke:none;opacity:0}
+#bdiag .sim.on{opacity:1}
+.dgm-legend{display:flex;gap:12px;flex-wrap:wrap;padding:5px 14px;border-top:1px solid var(--line);font-size:10px;color:var(--dim);font-family:var(--mono)}
+.dgm-legend span{display:inline-flex;align-items:center;gap:5px}
+.dgm-legend i{width:12px;height:2px;display:inline-block;border-radius:2px}
+.dgm-foot{padding:0 14px 6px;font-size:9.8px;color:var(--dim);line-height:1.5}
+
+/* ---------- 控制台 ---------- */
+.console{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(14,21,29,.9),rgba(9,13,18,.9))}
+.con-head{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line)}
+.con-head b{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:650}
+.scene-list{display:flex;gap:5px;flex-wrap:nowrap;padding:7px 10px;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;flex:0 0 auto;scrollbar-width:thin}
+.scene-list::-webkit-scrollbar{height:6px}
+.scene-list::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+.sbtn{flex:0 0 auto;border:1px solid var(--line);background:#111a24;color:var(--mut);border-radius:6px;padding:3px 7px;font-size:10.5px;cursor:pointer;white-space:nowrap}
+.sbtn:hover{border-color:#31485a;color:var(--tx)}
+.sbtn.on{border-color:rgba(167,139,250,.6);background:rgba(167,139,250,.14);color:#e8ddff}
+.stepcard{padding:8px 12px 6px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.step-top{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.step-top .sname{color:#9fb3c6;font-family:var(--sans);font-size:10.5px}
+.stepcard h3{margin:3px 0 2px;font-size:13.5px;font-weight:650;color:#eef7fd}
+.stepcard p{margin:0 0 5px;font-size:11.6px;line-height:1.62;color:#b9c9d7;min-height:56px}
+.stepcard p code{font-family:var(--mono);font-size:10.8px;color:#d9c9ff;background:rgba(167,139,250,.10);padding:0 3px;border-radius:3px}
+.stepctl{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.stepctl label{font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px}
+input[type=range]{width:70px;accent-color:#a78bfa}
+.hint{margin-top:5px;font-size:10px;color:var(--dim);line-height:1.5;border-left:2px solid #24384a;padding-left:7px;min-height:15px}
+.hint b{color:#8fb4cc;font-weight:600}
+.waves{flex:0 0 auto;padding:4px 12px 0;border-bottom:1px solid var(--line)}
+#wave{width:100%;height:206px;display:block;background:#080d12;border:1px solid var(--line);border-radius:6px}
+.wlegend{display:flex;gap:9px;flex-wrap:wrap;padding:4px 2px 6px;font-size:9.5px;color:var(--dim);font-family:var(--mono)}
+.wlegend i{width:10px;height:2px;border-radius:2px;display:inline-block}
+.statrow{display:flex;gap:9px;flex-wrap:wrap;padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--dim);flex:0 0 auto}
+.statrow b{color:#dff0fb;font-weight:600}
+.statrow .f{color:#54687a}
+.statrow .f.on{color:#7ee2a0}
+.statrow .f.warn{color:#ff9f45}
+
+/* ---------- 抽屉 ---------- */
+.drawer{flex:0 0 auto;height:34px;display:flex;flex-direction:column;border-top:1px solid var(--line);background:#0b1117;transition:height .18s}
+.drawer.open{height:46vh}
+.drawer-tabs{display:flex;align-items:center;gap:5px;padding:0 12px;height:33px;flex:0 0 33px}
+.dtab{border:1px solid transparent;background:none;color:var(--dim);font-size:11px;padding:4px 8px;border-radius:5px;cursor:pointer}
+.dtab:hover{color:var(--mut)}
+.dtab.on{color:#dff0fb;border-color:var(--line2);background:#141d27}
+.drawer-tabs .grow{flex:1}
+.drawer-tabs .src{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.drawer-panes{flex:1;min-height:0;position:relative;display:none}
+.drawer.open .drawer-panes{display:block}
+.pane{position:absolute;inset:0;display:none;flex-direction:column;min-height:0}
+.pane.on{display:flex}
+.gbar{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.gbar input{background:#0f1720;border:1px solid var(--line2);color:var(--tx);height:24px;border-radius:5px;padding:0 8px;font-size:11px;width:230px;outline:none;font-family:var(--mono)}
+.gbar input:focus{border-color:rgba(167,139,250,.5)}
+.gfilters{display:flex;gap:4px;flex-wrap:wrap}
+.gf{border:1px solid var(--line);background:#111a24;color:var(--dim);font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer}
+.gf.on{color:#e8ddff;border-color:rgba(167,139,250,.5);background:rgba(167,139,250,.1)}
+.gcount{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.gwrap{flex:1;min-height:0;overflow:auto;padding:0 12px 12px}
+.gwrap::-webkit-scrollbar,.regwrap::-webkit-scrollbar,.codewrap::-webkit-scrollbar{width:8px}
+.gwrap::-webkit-scrollbar-thumb,.regwrap::-webkit-scrollbar-thumb,.codewrap::-webkit-scrollbar-thumb{background:#22303d;border-radius:4px}
+table.gt{width:100%;border-collapse:collapse;font-size:10.8px}
+table.gt th{position:sticky;top:0;background:#0e1620;text-align:left;color:#9fb3c6;font-weight:600;font-size:9.6px;
+  letter-spacing:.06em;padding:6px 6px;border-bottom:1px solid var(--line2);z-index:2;white-space:nowrap}
+table.gt td{padding:4px 6px;border-bottom:1px solid #16212c;vertical-align:top;color:#b9cad8;line-height:1.45}
+table.gt tr:hover td{background:rgba(167,139,250,.05)}
+table.gt tr.hit td{background:rgba(167,139,250,.16)}
+#wave{cursor:default}
+table.gt td.ab{font-family:var(--mono);color:#d9c9ff;white-space:nowrap}
+table.gt td.en{color:#8fa8bb;font-size:10px}
+table.gt td.src{font-family:var(--mono);font-size:9.4px;color:#6f8497;white-space:nowrap}
+table.gt .ty{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid;white-space:nowrap}
+table.gt .ty.pin{color:#ffd48a;border-color:rgba(251,191,36,.35)}
+table.gt .ty.reg{color:#a8dbff;border-color:rgba(125,211,252,.4)}
+table.gt .ty.bit{color:#b9c9d7;border-color:#31424f}
+table.gt .ty.concept{color:#9fd6c7;border-color:rgba(45,212,191,.35)}
+table.gt .ty.mode{color:#d9c9ff;border-color:rgba(167,139,250,.4)}
+table.gt .ty.err{color:#ff9b9b;border-color:rgba(248,113,113,.45)}
+table.gt .ty.clk{color:#7fe6f2;border-color:rgba(56,208,224,.4)}
+table.gt .ty.sig{color:#8fe6ac;border-color:rgba(74,222,128,.35)}
+.mini{color:var(--dim);font-size:9.6px;font-family:var(--mono)}
+
+/* 寄存器 */
+.regwrap{flex:1;min-height:0;overflow:auto;padding:8px 12px 14px}
+.reg{margin-bottom:9px;border:1px solid var(--line);border-radius:7px;background:rgba(15,23,32,.7);overflow:hidden}
+.reg-h{display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line)}
+.reg-h b{font-family:var(--mono);font-size:11px;color:#cfe0ee}
+.reg-h .off{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.reg-h .d{font-size:10px;color:var(--dim);margin-left:auto}
+.reg-h .acc{cursor:pointer;font-family:var(--mono);font-size:9px;color:#7f95a8;border:1px solid #2a3a49;border-radius:3px;padding:0 4px}
+.bits{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;padding:4px 6px 0}
+.bit{font-family:var(--mono);font-size:8.2px;text-align:center;color:#5f7487;padding:1px 0}
+.fields{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;padding:1px 6px 5px}
+.fld{grid-row:1;border:1px solid #24333f;border-radius:3px;padding:2px 2px;font-family:var(--mono);font-size:8.2px;
+  text-align:center;color:#a9bfd0;background:#111a24;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fld:hover{border-color:#3d566a;color:#e6f4fb}
+.fld.rsv{color:#42525f;background:#0d151d;border-color:#1b2833}
+.fld.hi{border-color:rgba(167,139,250,.75);background:rgba(167,139,250,.16);color:#efe7ff}
+.reg-note{font-size:9.6px;color:var(--dim);padding:0 8px 5px;line-height:1.5}
+
+/* 代码 */
+.codewrap{flex:1;min-height:0;overflow:auto;padding:10px 14px 16px}
+.codeblk{border:1px solid var(--line);border-radius:7px;margin-bottom:9px;background:#0a1017}
+.codeblk summary{cursor:pointer;padding:6px 10px;font-size:11px;color:#b9cad8;list-style:none}
+.codeblk summary::-webkit-details-marker{display:none}
+.codeblk summary:before{content:'▸ ';color:var(--serial);font-family:var(--mono)}
+.codeblk[open] summary:before{content:'▾ '}
+.codeblk pre{margin:0;padding:8px 12px 12px;font-family:var(--mono);font-size:10.6px;line-height:1.6;color:#a9c6d8;overflow:auto;white-space:pre}
+.codeblk .cap{font-size:10px;color:var(--dim);padding:0 12px 8px;border-top:1px dashed #1b2833;margin-top:2px;line-height:1.55}
+
+/* 表格 / 说明 */
+.note{font-size:10.5px;color:#7d90a3;line-height:1.6;padding:6px 12px 10px}
+.warn{color:#ffb37a}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:3px 10px;font-size:10.8px;color:#b9cad8;padding:8px 12px;line-height:1.55}
+.kv i{font-style:normal;color:#6f8497;font-family:var(--mono);font-size:9.6px}
+
+.frule{margin:8px 0 10px;border:1px solid var(--line);border-radius:7px;background:rgba(15,23,32,.6);padding:6px 10px}
+.frule summary{cursor:pointer;font-size:10.8px;color:#c3d3e1;list-style:none}
+.frule summary::-webkit-details-marker{display:none}
+.frule summary:before{content:'▸ ';color:var(--serial);font-family:var(--mono)}
+.frule[open] summary:before{content:'▾ '}
+.frule ol{margin:5px 0 4px 18px;padding:0;font-size:10.7px;line-height:1.6;color:#b9cad8}
+.frule li{margin-bottom:2px}
+.frule b{color:#d9c9ff;font-family:var(--mono);font-size:10px}
+.frule .t{color:#8fa8bb;font-family:var(--mono);font-size:9.4px}
+/* 悬浮卡 */
+.tip{position:fixed;z-index:99;max-width:340px;background:linear-gradient(180deg,#101a24,#0b1118);border:1px solid #2e4557;
+  border-radius:9px;box-shadow:0 18px 46px -12px rgba(0,0,0,.9);padding:9px 11px;display:none;pointer-events:none}
+.tip.on{display:block}
+.tip .th{display:flex;align-items:baseline;gap:7px;margin-bottom:3px}
+.tip .th b{font-family:var(--mono);font-size:12.5px;color:#d9c9ff}
+.tip .th span{font-size:9px;color:var(--dim);font-family:var(--mono)}
+.tip .zh{font-size:12px;color:#e6f2fa;font-weight:600;margin-bottom:3px}
+.tip .en{font-size:9.8px;color:#8296aa;font-family:var(--mono);margin-bottom:5px}
+.tip .kv2{font-size:10.6px;line-height:1.6;color:#adc2d3}
+.tip .note2{margin-top:4px;font-size:9.2px;color:#5c7284;font-family:var(--mono)}
+.hidden{display:none!important}
+@media (max-width:1180px){
+  .main{grid-template-columns:1fr 440px}
+  .stepcard p{min-height:64px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">UART</div>
+  <div class="ttl">
+    <h1>USART / UART 串口控制器 · 框图与位级时序</h1>
+    <span>STM32U575RIT6 · <b>RM0456 Rev 5 §66（p.5492–5662）· §67 LPUART</b> · 每条结论标注手册章节，图中信号可点击</span>
+  </div>
+  <div class="topchips">
+    <span class="chip on">全双工异步</span>
+    <span class="chip">16 / 8 倍过采样</span>
+    <span class="chip">13 个寄存器</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span class="tb-lab">参数</span>
+  <label class="mini" title="M[1:0]：00=8 位、01=9 位；PCE=1 时校验位占用 MSB，实际数据位 = 字长−1">字长 M
+    <select id="pData"><option value="8" selected>8</option><option value="9">9</option></select>
+  </label>
+  <label class="mini">校验
+    <select id="pParity"><option value="none" selected>无</option><option value="even">偶</option><option value="odd">奇</option></select>
+  </label>
+  <label class="mini">停止位
+    <select id="pStop"><option value="1" selected>1</option><option value="1.5">1.5</option><option value="2">2</option></select>
+  </label>
+  <label class="mini">过采样
+    <select id="pOver8"><option value="0" selected>16 倍</option><option value="1">8 倍</option></select>
+  </label>
+  <div class="sep"></div>
+  <span class="tb-lab">聚焦</span>
+  <button class="btn" data-focus="all">全部</button>
+  <button class="btn" data-focus="clk">时钟链</button>
+  <button class="btn" data-focus="tx">发送链</button>
+  <button class="btn" data-focus="rx">接收链</button>
+  <button class="btn" data-focus="irq">中断 / DMA</button>
+  <div class="sep"></div>
+  <button class="btn" id="btnGlossJump">术语表 <span class="mini" id="glossCount">(0)</span></button>
+  <button class="btn" id="btnFlagJump" title="开发中最常用的 ISR 状态位：置位条件 / 清除方式 / 典型用法">状态位 <span class="mini" id="flagCount">(0)</span></button>
+  <span class="tb-right"><span id="devNote">USART1 · APB2 · usart_ker_ck 独立于 pclk</span></span>
+</div>
+
+<div class="main">
+  <section class="dgm">
+    <div class="dgm-head">
+      <b>Figure 800 · USART block diagram（按 RM0456 重绘）</b>
+      <span>悬停看释义 · 点击模块/信号高亮</span>
+      <div class="zoom">
+        <button class="btn on" data-zoom="fit">适应</button>
+        <button class="btn" data-zoom="1">100%</button>
+        <button class="btn" data-zoom="1.3">130%</button>
+        <button class="btn" id="btnFocus">专注框图</button>
+      </div>
+    </div>
+    <div class="dgm-body">
+      <svg id="bdiag" viewBox="0 0 1240 700" aria-label="USART 框图">
+        <defs>
+          <marker id="arw" viewBox="0 0 8 8" refX="7.2" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/>
+          </marker>
+        </defs>
+        <rect class="frame" x="176" y="16" width="1006" height="668"/>
+
+        <!-- ===== 左侧外部信号 ===== -->
+        <text class="ext" x="8" y="44">usart_pclk</text>
+        <text class="ext" x="8" y="76">usart_ker_ck</text>
+        <text class="ext" x="8" y="300">USART_RX</text>
+        <text class="ext" x="8" y="452">USART_CTS / NSS</text>
+        <text class="ext" x="8" y="552">USART_CK</text>
+        <text class="ext" x="8" y="496">USART_RTS / DE</text>
+        <text class="ext" x="8" y="662">usart_trg[15:0]</text>
+        <text class="ext" x="1214" y="136" text-anchor="end">USART_TX</text>
+        <text class="ext" x="1214" y="432" text-anchor="end">USART_CK</text>
+
+        <!-- ===== APB / IRQ / DMA ===== -->
+        <g class="mod" data-t="usart_pclk" id="m_apb">
+          <rect x="182" y="60" width="12" height="576" rx="2" fill="#0f1a24"/>
+          <text class="msub" transform="translate(190,348) rotate(-90)" text-anchor="middle">32-bit APB 总线</text>
+        </g>
+        <g class="mod ctl" data-t="usart_it" id="m_irq">
+          <rect x="208" y="30" width="86" height="44"/>
+          <text x="251" y="47" text-anchor="middle" class="mname">IRQ 接口</text>
+          <text x="251" y="61" text-anchor="middle" class="msub">usart_it / wkup</text>
+        </g>
+        <g class="mod ctl" data-t="usart_tx_dma" id="m_dma">
+          <rect x="208" y="552" width="86" height="52"/>
+          <text x="251" y="572" text-anchor="middle" class="mname">DMA 接口</text>
+          <text x="251" y="586" text-anchor="middle" class="msub">tx_dma / rx_dma</text>
+        </g>
+
+        <!-- ===== 发送通道 ===== -->
+        <g class="mod" data-t="TDR" id="m_tdr">
+          <rect x="300" y="112" width="86" height="44"/>
+          <text x="343" y="131" text-anchor="middle" class="mname">TDR</text>
+          <text x="343" y="145" text-anchor="middle" class="msub">发送数据寄存器</text>
+        </g>
+        <g class="mod" data-t="TXFIFO" id="m_txfifo">
+          <rect x="400" y="112" width="80" height="44"/>
+          <text x="440" y="131" text-anchor="middle" class="mname">TxFIFO</text>
+          <text x="440" y="145" text-anchor="middle" class="msub">9 位宽 · 可选</text>
+        </g>
+        <g class="mod" data-t="tx_shift" id="m_txsr">
+          <rect x="496" y="108" width="126" height="52"/>
+          <text x="559" y="128" text-anchor="middle" class="mname">TX 移位寄存器</text>
+          <text x="559" y="143" text-anchor="middle" class="msub">LSB 优先 · MSBFIRST 可选</text>
+        </g>
+        <g class="mod ctl" data-t="tx_control" id="m_txctl">
+          <rect x="640" y="98" width="116" height="70"/>
+          <text x="698" y="118" text-anchor="middle" class="mname">发送控制</text>
+          <text x="698" y="132" text-anchor="middle" class="msub">TE · PCE/PS</text>
+          <text x="698" y="145" text-anchor="middle" class="msub">STOP · 校验/断帧</text>
+        </g>
+        <g class="mod" data-t="USART_TX" id="m_txpin">
+          <rect x="900" y="116" width="120" height="40"/>
+          <text x="960" y="141" text-anchor="middle" class="mname">TX 引脚输出</text>
+        </g>
+
+        <!-- ===== 接收通道 ===== -->
+        <g class="mod" data-t="start_detect" id="m_rxdet">
+          <rect x="300" y="286" width="132" height="82"/>
+          <text x="366" y="306" text-anchor="middle" class="mname">起始位检测</text>
+          <text x="366" y="320" text-anchor="middle" class="mname">&amp; 过采样</text>
+          <text x="366" y="336" text-anchor="middle" class="msub">OVER8 · ONEBIT</text>
+          <text x="366" y="350" text-anchor="middle" class="msub">三采样 · 多数表决</text>
+        </g>
+        <g class="mod" data-t="rx_shift" id="m_rxsr">
+          <rect x="462" y="300" width="118" height="52"/>
+          <text x="521" y="320" text-anchor="middle" class="mname">RX 移位寄存器</text>
+          <text x="521" y="335" text-anchor="middle" class="msub">LSB 先入</text>
+        </g>
+        <g class="mod" data-t="RXFIFO" id="m_rxfifo">
+          <rect x="606" y="300" width="82" height="52"/>
+          <text x="647" y="320" text-anchor="middle" class="mname">RxFIFO</text>
+          <text x="647" y="335" text-anchor="middle" class="msub">12 位宽 · 可选</text>
+        </g>
+        <g class="mod" data-t="RDR" id="m_rdr">
+          <rect x="716" y="300" width="88" height="52"/>
+          <text x="760" y="320" text-anchor="middle" class="mname">RDR</text>
+          <text x="760" y="335" text-anchor="middle" class="msub">接收数据寄存器</text>
+        </g>
+
+        <!-- ===== 标志 / 模式 ===== -->
+        <g class="mod" data-t="ISR" id="m_isr">
+          <rect x="838" y="176" width="150" height="96"/>
+          <text x="913" y="196" text-anchor="middle" class="mname">ISR / ICR</text>
+          <text x="913" y="211" text-anchor="middle" class="msub">TXE/TC/RXNE/IDLE</text>
+          <text x="913" y="225" text-anchor="middle" class="msub">ORE/FE/NE/PE</text>
+          <text x="913" y="247" text-anchor="middle" class="msub">写 1 清除 (ICR)</text>
+        </g>
+        <g class="mod ctl" data-t="RTOF" id="m_rto">
+          <rect x="838" y="286" width="150" height="58"/>
+          <text x="913" y="306" text-anchor="middle" class="mname">RTO / ABR</text>
+          <text x="913" y="320" text-anchor="middle" class="msub">接收超时 · 自动波特率</text>
+          <text x="913" y="334" text-anchor="middle" class="msub">RTOR · ABRMOD</text>
+        </g>
+        <g class="mod ctl" data-t="mute_mode" id="m_mute">
+          <rect x="838" y="360" width="150" height="62"/>
+          <text x="913" y="380" text-anchor="middle" class="mname">静音 / 唤醒</text>
+          <text x="913" y="394" text-anchor="middle" class="msub">MME · WAKE · RWU</text>
+          <text x="913" y="408" text-anchor="middle" class="msub">ADD 地址匹配</text>
+        </g>
+        <g class="mod ctl" data-t="com_controller" id="m_com">
+          <rect x="1010" y="286" width="160" height="136"/>
+          <text x="1090" y="308" text-anchor="middle" class="mname">协议 / 模式控制</text>
+          <text x="1090" y="324" text-anchor="middle" class="msub">LIN · 智能卡 · IrDA</text>
+          <text x="1090" y="338" text-anchor="middle" class="msub">RS485 DE · 单线半双工</text>
+          <text x="1090" y="352" text-anchor="middle" class="msub">同步主/从 (CK)</text>
+          <text x="1090" y="374" text-anchor="middle" class="msub">CTS/RTS 硬件流控</text>
+          <text x="1090" y="394" text-anchor="middle" class="msub">COM 控制器</text>
+        </g>
+
+        <!-- ===== 硬件流控 ===== -->
+        <g class="mod ctl" data-t="CTS" id="m_flow">
+          <rect x="300" y="430" width="132" height="58"/>
+          <text x="366" y="450" text-anchor="middle" class="mname">硬件流控</text>
+          <text x="366" y="464" text-anchor="middle" class="msub">CTSE · RTSE</text>
+          <text x="366" y="478" text-anchor="middle" class="msub">RTS 与 DE 共用引脚</text>
+        </g>
+
+        <!-- ===== 波特率发生器 ===== -->
+        <g class="mod ctl" data-t="PRESC" id="m_presc">
+          <rect x="400" y="576" width="82" height="60"/>
+          <text x="441" y="596" text-anchor="middle" class="mname">PRESC</text>
+          <text x="441" y="610" text-anchor="middle" class="msub">1…/256</text>
+          <text x="441" y="624" text-anchor="middle" class="msub">仅 UE=0 可写</text>
+        </g>
+        <g class="mod ctl" data-t="USARTDIV" id="m_brr">
+          <rect x="492" y="576" width="104" height="60"/>
+          <text x="544" y="596" text-anchor="middle" class="mname">BRR</text>
+          <text x="544" y="610" text-anchor="middle" class="msub">USARTDIV</text>
+          <text x="544" y="624" text-anchor="middle" class="msub">整数 + 小数</text>
+        </g>
+        <g class="mod ctl" data-t="baud_counter" id="m_baudcnt">
+          <rect x="606" y="576" width="150" height="60"/>
+          <text x="681" y="596" text-anchor="middle" class="mname">波特率计数器</text>
+          <text x="681" y="610" text-anchor="middle" class="msub">16× / 8× 采样时钟</text>
+          <text x="681" y="624" text-anchor="middle" class="msub">收发共用</text>
+        </g>
+
+        <!-- ===== 触发 / 自主模式 ===== -->
+        <g class="mod ctl" data-t="usart_trg" id="m_trg">
+          <rect x="208" y="626" width="130" height="50"/>
+          <text x="273" y="646" text-anchor="middle" class="mname">自主模式</text>
+          <text x="273" y="660" text-anchor="middle" class="msub">AUTOCR · TDN</text>
+          <text x="273" y="672" text-anchor="middle" class="msub">TRIGEN / TRIGSEL</text>
+        </g>
+
+        <!-- ===== 连线：时钟 ===== -->
+        <path class="sig clk" data-t="usart_ker_ck" d="M150,76 H400 V576"/>
+        <path class="sig clk" data-t="usart_ker_ck" d="M150,44 H182"/>
+        <path class="sig clk" data-t="usart_ker_ck_pres" d="M482,606 H492"/>
+        <path class="sig clk" data-t="baud_counter" d="M596,606 H606"/>
+        <path class="sig clk" data-t="baud_counter" d="M681,576 V566 H559 V160" stroke-dasharray="3 3"/>
+        <path class="sig clk" data-t="baud_counter" d="M640,566 V326 H580" stroke-dasharray="3 3"/>
+        <text class="lab" x="606" y="560">采样时钟</text>
+
+        <!-- ===== 连线：发送 ===== -->
+        <path class="sig bus" data-t="TDR" d="M212,140 H300"/>
+        <path class="sig out" data-t="TDR" d="M386,134 H400"/>
+        <path class="sig out" data-t="tx_shift" d="M480,134 H496"/>
+        <path class="sig out" data-t="tx_control" d="M622,134 H640"/>
+        <path class="sig out" data-t="USART_TX" d="M756,134 H900"/>
+        <path class="sig out" data-t="USART_TX" d="M1020,136 H1214"/>
+        <text class="lab" x="780" y="128">USART_TX</text>
+        <path class="sig evt" data-t="TXE" d="M300,112 V96 H251 V74" stroke-dasharray="2 2"/>
+        <text class="lab" x="228" y="92">TXE / TC</text>
+
+        <!-- ===== 连线：接收 ===== -->
+        <path class="sig in" data-t="USART_RX" d="M150,300 H300"/>
+        <text class="lab" x="188" y="294">USART_RX</text>
+        <path class="sig evt" data-t="sample_points" d="M432,320 H462"/>
+        <path class="sig evt" data-t="RXNE" d="M580,320 H606"/>
+        <path class="sig bus" data-t="RDR" d="M804,320 H838"/>
+        <path class="sig evt" data-t="RXNE" d="M760,300 V272 H838" stroke-dasharray="2 2"/>
+        <text class="lab" x="700" y="268">RXNE</text>
+
+        <!-- ===== IRQ / DMA ===== -->
+        <path class="sig irq" data-t="usart_it" d="M838,200 H294 V74 H251"/>
+        <text class="lab" x="470" y="196">usart_it / usart_wkup</text>
+        <path class="sig dma" data-t="usart_tx_dma" d="M343,156 V540 H294 V552"/>
+        <path class="sig dma" data-t="usart_rx_dma" d="M760,352 V532 H294 V552"/>
+        <text class="lab" x="306" y="524">DMA 请求</text>
+
+        <!-- ===== 流控 ===== -->
+        <path class="sig in" data-t="CTS" d="M150,452 H300"/>
+        <path class="sig out" data-t="RTS" d="M300,470 H208 V500 H150"/>
+        <text class="lab" x="228" y="494">RTS / DE</text>
+        <path class="sig out" data-t="RTS" d="M432,458 H640 V150" stroke-dasharray="2 2"/>
+
+        <!-- ===== CK ===== -->
+        <path class="sig in" data-t="USART_CK" d="M150,548 H1010 V400"/>
+        <path class="sig out" data-t="USART_CK" d="M1170,410 H1214"/>
+        <text class="lab" x="1140" y="424">USART_CK</text>
+
+        <!-- ===== 触发 ===== -->
+        <path class="sig in" data-t="usart_trg" d="M150,662 H208"/>
+        <path class="sig evt" data-t="usart_trg" d="M338,650 H640 V168" stroke-dasharray="2 2"/>
+
+        <!-- ===== 模式控制 ===== -->
+        <path class="sig evt" data-t="com_controller" d="M640,170 H1010 V300" stroke-dasharray="2 2"/>
+        <path class="sig evt" data-t="mute_mode" d="M838,390 H804 V352"/>
+
+        <!-- 仿真脉冲 -->
+        <circle class="sim" id="simTx" cx="780" cy="134" r="3.4"/>
+        <circle class="sim" id="simRx" cx="240" cy="300" r="3.4"/>
+      </svg>
+    </div>
+    <div class="dgm-legend">
+      <span><i style="background:#38d0e0"></i>时钟</span>
+      <span><i style="background:#fbbf24"></i>引脚 / 外部输入</span>
+      <span><i style="background:#ff9f45"></i>发送通路</span>
+      <span><i style="background:#4ade80"></i>事件 / 状态</span>
+      <span><i style="background:#a78bfa"></i>中断</span>
+      <span><i style="background:#f87171"></i>DMA</span>
+      <span><i style="background:#7dd3fc"></i>APB 总线</span>
+    </div>
+    <div class="dgm-foot">
+      依据 <b>RM0456 §66.5.1 图 800（p.5498）</b> 重绘：USART 分为 <b>usart_pclk</b>（寄存器访问）与 <b>usart_ker_ck</b>（内核时钟）两个独立时钟域；<b>usart_ker_ck</b> 先经 <b>PRESC</b> 得到 <b>usart_ker_ck_pres</b>，再送 BRR 与过采样逻辑（§66.5.7, p.5522）。手册明确 <b>USART_DE 与 USART_RTS 共用同一引脚、USART_NSS 与 USART_CTS 共用同一引脚</b>（§66.5.2, p.5500）。图中 32 位 APB 总线、DMA 接口、IRQ 接口、COM 控制器与触发输入均取自图 800 的可读标注。
+    </div>
+  </section>
+
+  <aside class="console">
+    <div class="con-head">
+      <b>功能场景</b>
+      <span class="mini" id="sceneGroup"></span>
+    </div>
+    <div class="scene-list" id="sceneList"></div>
+    <div class="stepcard">
+      <div class="step-top"><span id="stepNo">1 / 5</span><span class="sname" id="sceneName"></span></div>
+      <h3 id="stepTitle">—</h3>
+      <p id="stepDesc">—</p>
+      <div class="stepctl">
+        <button class="btn" id="btnPrev">上一步</button>
+        <button class="btn" id="btnPlay">播放</button>
+        <button class="btn" id="btnNext">下一步</button>
+        <button class="btn" id="btnReset">复位</button>
+      </div>
+      <div class="stepctl" style="margin-top:4px">
+        <button class="btn" id="btnTick">单步时钟</button>
+        <button class="btn" id="btnTickBit">下一位</button>
+        <button class="btn on" id="btnAutoClr" title="开：读 RDR / 写 ICR 后波形自动回落；关：标志保持">自动清标志</button>
+        <button class="btn" id="btnClrFlag" title="按 ICR 写 1 清除当前错误/空闲标志">清标志</button>
+      </div>
+      <div class="stepctl" style="margin-top:4px">
+        <label>播放速度<input type="range" id="speed" min="1" max="5" value="2"><span class="mini" id="speedVal">约 4 tick/s</span></label>
+      </div>
+      <div class="hint" id="stepNote"></div>
+    </div>
+    <div class="waves">
+      <canvas id="wave"></canvas>
+      <div class="wlegend" id="waveLegend"></div>
+      <div class="mini" id="flagNote" style="padding:0 2px 5px;color:#5c7284;line-height:1.5">一个位 = 16（或 8）个采样节拍；图中竖虚线为采样点。</div>
+      <button class="btn" id="btnSigNote" style="width:100%;margin-bottom:6px">本场景信号说明（每个波形的产生条件）</button>
+    </div>
+    <div class="statrow" id="statRow"></div>
+  </aside>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-tabs">
+    <button class="dtab on" data-tab="gloss">术语表</button>
+    <button class="dtab" data-tab="signals">场景信号</button>
+    <button class="dtab" data-tab="flags">常用状态位</button>
+    <button class="dtab" data-tab="inst">实例 / 模式</button>
+    <button class="dtab" data-tab="regs">寄存器位域</button>
+    <button class="dtab" data-tab="code">寄存器级代码</button>
+    <span class="grow"></span>
+    <span class="src">RM0456 Rev 5 §66 / §67 · 中文版页码</span>
+    <button class="btn" id="drawerToggle">展开</button>
+  </div>
+  <div class="drawer-panes">
+    <div class="pane on" id="pane-gloss">
+      <div class="gbar">
+        <input id="gq" placeholder="搜索：缩写 / 全称 / 中文 / 用途…">
+        <div class="gfilters" id="gFilters"></div>
+        <span class="gcount" id="gCount"></span>
+      </div>
+      <div class="gwrap" id="gWrap"><table class="gt"><thead><tr>
+        <th style="width:122px">缩写 / 符号</th><th style="width:196px">全称</th><th style="width:116px">中文</th>
+        <th style="width:66px">类型</th><th>含义与用途（手册口径）</th><th style="width:98px">出处</th>
+      </tr></thead><tbody id="gBody"></tbody></table></div>
+    </div>
+    <div class="pane" id="pane-signals">
+      <div class="gbar"><span class="mini">当前场景每个波形的作用、是否有效、产生与清除条件</span><span class="gcount" id="sigScene"></span></div>
+      <div class="gwrap" id="sigWrap"></div>
+    </div>
+    <div class="pane" id="pane-flags">
+      <div class="gbar">
+        <input id="fq" placeholder="搜索：标志 / 含义 / 用法…">
+        <div class="gfilters" id="fFilters"></div>
+        <span class="gcount" id="fCount"></span>
+      </div>
+      <div class="gwrap" id="flagWrap">
+      <details class="frule" open>
+        <summary>标志变更的时序规则（何时置位、何时清零，按手册顺序）</summary>
+        <ol>
+          <li><b>TXE</b><span class="t">（ISR bit7）</span>：TDR 内容搬入移位寄存器的同一位边界置 1，发送器随即开始移出起始位；写 TDR 立刻清 0。<span class="t">§66.8.10, p.5648</span></li>
+          <li><b>TC</b><span class="t">（bit6）</span>：最后一个停止位结束、且 TXE/TXFE=1 时才置 1，因此比 TXE 晚整帧；写 TDR 或 ICR.TCCF 清 0。<span class="t">§66.8.9, p.5638</span></li>
+          <li><b>RXNE</b><span class="t">（bit5）</span>：停止位采样结束、移位寄存器内容转入 RDR 的瞬间置 1；读 RDR 或 RQR.RXFRQ 清 0。2 个停止位时在第一个停止位结束就置位。<span class="t">§66.5.7, p.5528</span></li>
+          <li><b>BUSY</b><span class="t">（bit16）</span>：检测到起始位即置 1，接收结束（停止位）由硬件清 0。<span class="t">§66.8.9, p.5634</span></li>
+          <li><b>IDLE</b><span class="t">（bit4）</span>：检测到空闲线时置 1；在下一次 RXNE 置位前不会重复置位；ICR.IDLECF 清 0。<span class="t">§66.8.9, p.5640</span></li>
+          <li><b>ORE</b><span class="t">（bit3）</span>：RXNE 仍为 1 时又收到新数据即置 1（FIFO 开：RXFIFO 满而移位寄存器还有数据待传）；ICR.ORECF 清 0，读 RDR 可先救回旧数据。<span class="t">§66.5.7, p.5520</span></li>
+          <li><b>NE</b><span class="t">（bit2）</span>：位中心三次采样不一致时，在 <b>RXNE 的上升沿</b>置 1；ONEBIT=1 时永不置位；ICR.NECF 清 0。<span class="t">§66.5.7, p.5524</span></li>
+          <li><b>FE</b><span class="t">（bit1）</span>：停止位采样点为 0 时置 1，与 RXNE 同时；ICR.FECF 清 0。0.5 个停止位不采样，因此无法检测 FE。<span class="t">§66.5.7, p.5526</span></li>
+          <li><b>PE</b><span class="t">（bit0）</span>：接收校验位与本地计算不符时置 1；ICR.PECF 清 0。<span class="t">§66.5.13, p.5544</span></li>
+          <li><b>REACK / TEACK</b><span class="t">（bit22 / bit21）</span>：硬件确认 RE/TE 已真正生效后置 1；对应 RE/TE 清零后由硬件清 0——进 Stop 前用它确认收发器就绪。<span class="t">§66.8.9, p.5632</span></li>
+        </ol>
+      </details>
+      <table class="gt"><thead><tr>
+        <th style="width:118px">标志 / 位</th><th style="width:118px">位置</th>
+        <th style="width:230px">置位条件</th><th style="width:170px">清除方式</th>
+        <th>典型用法</th><th style="width:96px">出处</th>
+      </tr></thead><tbody id="fBody"></tbody></table></div>
+    </div>
+    <div class="pane" id="pane-inst">
+      <div class="gbar"><span class="mini">总线归属来自 RCC 时钟使能寄存器；LPUART 差异来自 §67</span><span class="gcount">表 667 的 X 标记在 PDF 中为矢量，未读取</span></div>
+      <div class="gwrap" id="instWrap"></div>
+    </div>
+    <div class="pane" id="pane-regs">
+      <div class="gbar"><span class="mini">按真实 bit 绘制，31 → 0；紫色 = 当前场景相关，点击任一位域看全称</span><span class="gcount" id="regNote"></span></div>
+      <div class="regwrap" id="regWrap"></div>
+    </div>
+    <div class="pane" id="pane-code">
+      <div class="gbar"><span class="mini">寄存器级 C（CMSIS 风格），只示意配置顺序，不含完整工程</span></div>
+      <div class="codewrap" id="codeWrap"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+/* ============================================================
+   数据层：术语 / 寄存器 / 场景 / 代码
+   全部依据 .scratch/usart-atlas/facts.md（RM0456 Rev 5 中文版）
+   ============================================================ */
+const TYPES = {
+  pin:    ['引脚',   'pin'],
+  reg:    ['寄存器', 'reg'],
+  bit:    ['位域',   'bit'],
+  concept:['机制',   'concept'],
+  mode:   ['模式',   'mode'],
+  err:    ['错误',   'err'],
+  clk:    ['时钟',   'clk'],
+  sig:    ['内部信号','sig']
+};
+
+const TERMS = [
+/* ---- 时钟 / 总线 / 内部信号 ---- */
+{id:'usart_pclk',a:'usart_pclk',en:'USART APB clock',zh:'APB 接口时钟',t:'clk',u:'外设总线接口时钟，访问寄存器时必须有效；与 usart_ker_ck 完全独立（双时钟域）。',s:'§66.5.3, p.5504'},
+{id:'usart_ker_ck',a:'usart_ker_ck',en:'USART kernel clock',zh:'内核时钟',t:'clk',u:'USART 的时钟源，由 RCC 提供；即使它停止，寄存器仍可读写。',s:'§66.5.3, p.5504'},
+{id:'usart_ker_ck_pres',a:'usart_ker_ck_pres',en:'Prescaled kernel clock',zh:'预分频后内核时钟',t:'clk',u:'usart_ker_ck 经 PRESC 分频后的时钟，波特率公式用的就是它。',s:'§66.5.7, p.5522'},
+{id:'usart_it',a:'usart_it',en:'USART interrupt',zh:'全局中断',t:'sig',u:'汇总后的 USART 中断输出，送往 NVIC。',s:'§66.5.2, p.5502'},
+{id:'usart_wkup',a:'usart_wkup',en:'USART wakeup',zh:'唤醒中断',t:'sig',u:'把 MCU 从低功耗模式唤醒的中断输出。',s:'§66.5.2, p.5502'},
+{id:'usart_tx_dma',a:'usart_tx_dma',en:'TX DMA request',zh:'发送 DMA 请求',t:'sig',u:'TXE（FIFO 模式为 TXFNF）置位时产生，把内存数据搬到 TDR。',s:'§66.5.20, p.5574'},
+{id:'usart_rx_dma',a:'usart_rx_dma',en:'RX DMA request',zh:'接收 DMA 请求',t:'sig',u:'RXNE（FIFO 模式为 RXFNE）置位时产生，把 RDR 数据搬到内存。',s:'§66.5.20, p.5576'},
+{id:'usart_trg',a:'usart_trg[15:0]',en:'USART trigger',zh:'触发输入',t:'sig',u:'自主模式（AUTOCR）用它在 Stop 模式下硬件置 TE 并启动发送。',s:'§66.5.22, p.5584'},
+{id:'PRESC',a:'PRESC',en:'Prescaler register',zh:'预分频寄存器',t:'reg',u:'偏移 0x2C，PRESCALER[3:0] 取 1/2/4/6/8/10/12/16/32/64/128/256；非法值硬件强制为 /256；仅 UE=0 可写。',s:'§66.8.14, p.5658'},
+{id:'baud_counter',a:'baud generator',en:'Baud rate generator',zh:'波特率发生器',t:'concept',u:'由 usart_ker_ck_pres 与 BRR 共同产生收/发共用的位时钟与过采样时钟。',s:'§66.5.7, p.5522'},
+
+/* ---- 引脚 ---- */
+{id:'USART_TX',a:'USART_TX',en:'Transmit data',zh:'发送数据',t:'pin',u:'发送输出；发送器禁用时恢复为普通 I/O，使能但无数据时为高。',s:'§66.5.2, p.5498'},
+{id:'USART_RX',a:'USART_RX',en:'Receive data',zh:'接收数据',t:'pin',u:'串行输入，靠过采样区分有效数据与噪声。',s:'§66.5.2, p.5498'},
+{id:'USART_CTS',a:'USART_CTS',en:'Clear To Send',zh:'允许发送',t:'pin',u:'输入；CTSE=1 时发送器在下一帧前检查它，撤销（低）才继续发送。与 NSS 共用引脚。',s:'§66.5.21, p.5580'},
+{id:'CTS',a:'CTS / CTSIF',en:'Clear To Send / CTS interrupt flag',zh:'允许发送 / CTS 中断标志',t:'pin',u:'CTS 输入翻转且 CTSE=1 时置 CTSIF；CTS 位是引脚状态的反相副本。',s:'§66.8.9, p.5636'},
+{id:'USART_RTS',a:'USART_RTS',en:'Request To Send',zh:'请求发送',t:'pin',u:'输出；接收器准备好时保持低，接收寄存器满时拉高。与 DE 共用引脚。',s:'§66.5.21, p.5580'},
+{id:'RTS',a:'RTS / DE',en:'Request To Send / Driver Enable',zh:'请求发送 / 驱动使能',t:'pin',u:'RTS（硬件流控）与 DE（RS485 收发器使能）共用同一引脚，二者不可同时使用。',s:'§66.5.2, p.5500'},
+{id:'USART_DE',a:'USART_DE',en:'Driver Enable',zh:'驱动器使能',t:'pin',u:'RS485 模式（DEM=1）下激活外部收发器的发送方向；极性由 DEP 选择。',s:'§66.5.16, p.5582'},
+{id:'USART_CK',a:'USART_CK',en:'USART clock',zh:'同步时钟',t:'pin',u:'同步主模式输出、同步从模式输入；智能卡模式下给卡提供时钟。',s:'§66.5.2, p.5500'},
+{id:'USART_NSS',a:'USART_NSS',en:'NSS (slave select)',zh:'从机选择',t:'pin',u:'同步从模式的从机选择输入；与 CTS 共用引脚。',s:'§66.5.2, p.5500'},
+
+/* ---- 数据通路 ---- */
+{id:'TDR',a:'TDR',en:'Transmit Data Register',zh:'发送数据寄存器',t:'reg',u:'偏移 0x28，TDR[8:0]；仅 TXE/TXFNF=1 时可写，写入的 MSB 在启用校验时被校验位取代。',s:'§66.8.13, p.5656'},
+{id:'RDR',a:'RDR',en:'Receive Data Register',zh:'接收数据寄存器',t:'reg',u:'偏移 0x24，只读 RDR[8:0]；读它清除 RXNE。',s:'§66.8.12, p.5656'},
+{id:'TXFIFO',a:'TXFIFO',en:'Transmit FIFO',zh:'发送 FIFO',t:'reg',u:'9 位宽；FIFOEN=1 时启用，TDR 写入的数据进入 FIFO 排队。',s:'§66.5.5, p.5508'},
+{id:'RXFIFO',a:'RXFIFO',en:'Receive FIFO',zh:'接收 FIFO',t:'reg',u:'12 位宽（数据 + 校验/噪声/帧错误）；深度口径为 16 级（含 RDR 的 1 级）。',s:'§66.5.5, p.5508；§66.8.9, p.5630'},
+{id:'tx_shift',a:'TX shift register',en:'Transmit shift register',zh:'发送移位寄存器',t:'concept',u:'把 TDR/FIFO 的并行字按 LSB 优先串行移出（MSBFIRST=1 时改为 MSB 优先）。',s:'§66.5.6, p.5508'},
+{id:'rx_shift',a:'RX shift register',en:'Receive shift register',zh:'接收移位寄存器',t:'concept',u:'把采样得到的位按 LSB 先入组装成字，再送入 RDR / RxFIFO。',s:'§66.5.7, p.5518'},
+{id:'start_detect',a:'start bit detection',en:'Start bit detection',zh:'起始位检测',t:'concept',u:'检测序列 1 1 1 0 X 0 X 0 X 0 X 0 X 0 X 0；在位的第 3/5/7 与第 8/9/10 次采样做两次三选二判定。',s:'§66.5.7, p.5514–5516'},
+{id:'sample_points',a:'sampling',en:'Oversampling',zh:'过采样',t:'concept',u:'16 倍时数据/停止位在第 8、9、10 次采样；8 倍时采样时钟为 8 个/位。',s:'§66.5.7, p.5524'},
+{id:'USARTDIV',a:'USARTDIV / BRR',en:'USART divider',zh:'波特率分频值',t:'concept',u:'无符号定点数，直接编码进 BRR：16 倍时 BRR=USARTDIV，8 倍时 BRR[2:0]=USARTDIV[3:0]>>1；必须 ≥16。',s:'§66.5.8, p.5530'},
+{id:'BRR',a:'BRR',en:'Baud Rate Register',zh:'波特率寄存器',t:'reg',u:'偏移 0x0C，BRR[15:4] 为整数部分、BRR[3:0] 为小数部分（OVER8=1 时 bit3 必须为 0）。',s:'§66.8.5, p.5622'},
+
+/* ---- 状态 / 中断 ---- */
+{id:'ISR',a:'ISR / ICR',en:'Interrupt and Status / Interrupt flag Clear',zh:'状态寄存器 / 清除寄存器',t:'reg',u:'ISR 偏移 0x1C（只读标志），ICR 偏移 0x20（写 1 清除）；FIFO 开启与关闭时 ISR 有两个版本。',s:'§66.8.9–66.8.11, p.5630–5654'},
+{id:'TXE',a:'TXE',en:'Transmit data register Empty',zh:'发送数据寄存器空',t:'bit',u:'TDR 内容已转入移位寄存器；写 TDR 清除。FIFO 模式下对应 TXFNF。',s:'§66.8.10, p.5648'},
+{id:'TXFNF',a:'TXFNF',en:'TXFIFO Not Full',zh:'发送 FIFO 未满',t:'bit',u:'FIFO 模式下代替 TXE 表示可以写 TDR；FIFO 满时清零。',s:'§66.8.9, p.5638'},
+{id:'TC',a:'TC',en:'Transmission Complete',zh:'传输完成',t:'bit',u:'包含数据的帧发送完毕且 TXE/TXFE=1 时置位；写 TDR 或 ICR 的 TCCF 清除。',s:'§66.8.9, p.5638'},
+{id:'RXNE',a:'RXNE',en:'Receive data register Not Empty',zh:'接收数据寄存器非空',t:'bit',u:'移位寄存器内容已转入 RDR；读 RDR 或写 RQR 的 RXFRQ 清除。',s:'§66.8.10, p.5650'},
+{id:'RXFNE',a:'RXFNE',en:'RXFIFO Not Empty',zh:'接收 FIFO 非空',t:'bit',u:'FIFO 模式下的 RXNE 等价物；读空即清零。',s:'§66.8.9, p.5638'},
+{id:'IDLE',a:'IDLE',en:'Idle line detected',zh:'检测到空闲线',t:'bit',u:'检测到全 1 空闲帧时置位；下一次 RXNE 置位前不会再次置位；ICR 的 IDLECF 清除。',s:'§66.8.9, p.5640'},
+{id:'BUSY',a:'BUSY',en:'Busy flag',zh:'忙标志',t:'bit',u:'RX 线上正在接收（已检测到起始位）时为 1。',s:'§66.8.9, p.5634'},
+{id:'ORE',a:'ORE',en:'OverRun Error',zh:'溢出错误',t:'err',u:'FIFO 关：RXNE 未复位又收到新数据；FIFO 开：RXFIFO 已满而移位寄存器还有数据待传。ICR 的 ORECF 清除。',s:'§66.5.7, p.5520'},
+{id:'FE',a:'FE',en:'Framing Error',zh:'帧错误',t:'err',u:'预期时刻未识别出停止位（失步、噪声过大、断点字符、智能卡 NACK）；ICR 的 FECF 清除。',s:'§66.5.7, p.5526'},
+{id:'NE',a:'NE',en:'Noise Error',zh:'噪声错误',t:'err',u:'三采样多数表决不一致时置位，在 RXNE 上升沿置位；ONEBIT=1 时永不置位；ICR 的 NECF 清除。',s:'§66.5.7, p.5524'},
+{id:'PE',a:'PE',en:'Parity Error',zh:'校验错误',t:'err',u:'接收校验失败；ICR 的 PECF 清除。',s:'§66.5.13, p.5544'},
+{id:'RTOF',a:'RTOF',en:'Receiver TimeOut Flag',zh:'接收超时标志',t:'bit',u:'RTOR 设定的超时到期且无通信；ICR 的 RTOCF 清除，RTOIE=1 时中断。',s:'§66.5.17, p.5558'},
+{id:'mute_mode',a:'MME / RWU',en:'Mute Mode Enable / Receiver WakeUp',zh:'静音模式使能 / 接收器唤醒',t:'mode',u:'MME=1 可切静音；写 RQR 的 MMRQ 进入静音并置 RWU，收到匹配地址或空闲线后退出。',s:'§66.5.11, p.5538'},
+
+/* ---- 控制位 ---- */
+{id:'UE',a:'UE',en:'USART Enable',zh:'USART 使能',t:'bit',u:'清零则预分频器与输出停止、所有 ISR 标志复位（CR1 bit0）。',s:'§66.8.1, p.5598'},
+{id:'UESM',a:'UESM',en:'USART Enable in low-power Mode',zh:'低功耗模式使能',t:'bit',u:'置位后 USART 可把 MCU 从低功耗模式唤醒（CR1 bit1）。',s:'§66.8.1, p.5598'},
+{id:'TE',a:'TE',en:'Transmitter Enable',zh:'发送器使能',t:'bit',u:'CR1 bit3；自主模式下变为由硬件控制的状态位。',s:'§66.8.1, p.5598'},
+{id:'RE',a:'RE',en:'Receiver Enable',zh:'接收器使能',t:'bit',u:'CR1 bit2；置位后开始搜索起始位。',s:'§66.8.1, p.5598'},
+{id:'M0M1',a:'M0 / M1',en:'Word length',zh:'字长',t:'bit',u:'M[1:0]=00/01/10 → 8/9/7 个数据位（CR1 bit12 / bit28）。',s:'§66.8.1, p.5592'},
+{id:'OVER8',a:'OVER8',en:'Oversampling by 8',zh:'8 倍过采样',t:'bit',u:'0=16 倍、1=8 倍；LIN/IrDA/智能卡模式下硬件强制为 0。',s:'§66.8.1, p.5594'},
+{id:'ONEBIT',a:'ONEBIT',en:'One-bit sampling',zh:'单次采样',t:'bit',u:'CR3 bit11；0=三次采样多数表决，1=位中心单次采样（NE 永不置位）。',s:'§66.8.4, p.5618'},
+{id:'PCE',a:'PCE / PS',en:'Parity Control Enable / Selection',zh:'校验使能 / 奇偶选择',t:'bit',u:'PCE 使能校验位；PS=0 偶校验、PS=1 奇校验；校验位占用 MSB。',s:'§66.8.1, p.5596'},
+{id:'STOP',a:'STOP[1:0]',en:'Stop bits',zh:'停止位',t:'bit',u:'00=1、01=0.5、10=2、11=1.5 个停止位（CR2 bit13:12），仅 UE=0 可写。',s:'§66.8.3, p.5610'},
+{id:'FIFOEN',a:'FIFOEN',en:'FIFO Enable',zh:'FIFO 使能',t:'bit',u:'CR1 bit29；仅 UE=0 可写；IrDA/LIN 模式下不得启用。',s:'§66.8.1, p.5592'},
+
+/* ---- 流控 / 模式 ---- */
+{id:'CTSE',a:'CTSE / RTSE',en:'CTS Enable / RTS Enable',zh:'CTS / RTS 流控使能',t:'bit',u:'CR3 bit9/bit8，可独立启用。',s:'§66.8.4, p.5620'},
+{id:'com_controller',a:'COM controller',en:'Communication controller',zh:'通信控制器',t:'concept',u:'汇总 CK 生成、硬件流控、LIN/智能卡/IrDA/RS485 等模式控制。',s:'§66.5.1, p.5498'},
+{id:'DEM',a:'DEM / DEP',en:'Driver Enable Mode / Polarity',zh:'DE 模式 / 极性',t:'bit',u:'CR3 bit14/15；DE 输出到 RTS 引脚。',s:'§66.8.4, p.5618'},
+{id:'DEAT',a:'DEAT / DEDT',en:'Driver Enable Assertion / Deassertion Time',zh:'DE 前后间隔',t:'bit',u:'CR1 bit25:21 / 20:16，单位为一个采样时间（1/16 或 1/8 位）。',s:'§66.8.1, p.5602'},
+{id:'HDSEL',a:'HDSEL',en:'Half-Duplex Selection',zh:'单线半双工',t:'mode',u:'CR3 bit3；TX 与 RX 内部相连，RX 引脚不再使用。',s:'§66.5.19, p.5558'},
+{id:'LINEN',a:'LINEN',en:'LIN mode enable',zh:'LIN 模式',t:'mode',u:'CR2 bit14；断点 13 个 0 位，检测 10/11 位连续 0。',s:'§66.5.14, p.5546'},
+{id:'LBDF',a:'LBDF / LBDL',en:'LIN Break Detection Flag / Length',zh:'LIN 断点标志 / 长度',t:'bit',u:'LBDL 选 10 或 11 位；检测到断点置 LBDF，ICR 的 LBDCF 清除。',s:'§66.8.3, p.5612'},
+{id:'SCEN',a:'SCEN',en:'Smartcard mode enable',zh:'智能卡模式',t:'mode',u:'CR3 bit5；ISO 7816-3 T=0/T=1，需 8 数据位 + 校验，发送 1.5 停止位。',s:'§66.5.18, p.5560'},
+{id:'IREN',a:'IREN / IRLP',en:'IrDA mode enable / Low-power',zh:'IrDA 使能 / 低功耗',t:'mode',u:'CR3 bit1/bit2；RZI 调制，正常模式脉宽 3/16 位，最高 115.2 kbaud。',s:'§66.5.19, p.5568'},
+{id:'CLKEN',a:'CLKEN',en:'Clock enable',zh:'CK 引脚使能',t:'bit',u:'CR2 bit11；同步主模式输出时钟，同步从模式为输入。',s:'§66.8.3, p.5610'},
+{id:'LBCL',a:'LBCL',en:'Last Bit Clock pulse',zh:'最后一位时钟脉冲',t:'bit',u:'CR2 bit8，决定最后一位数据的时钟脉冲是否输出到 CK。',s:'§66.8.3, p.5612'},
+{id:'ABR',a:'ABREN / ABRMOD',en:'Auto Baud Rate',zh:'自动波特率',t:'concept',u:'四种模式：起始位测量、下降沿到下降沿、0x7F 帧、0x55 帧；完成置 ABRF、失败置 ABRE。',s:'§66.5.10, p.5536'},
+
+/* ---- 概念 ---- */
+{id:'oversampling',a:'oversampling',en:'Oversampling',zh:'过采样',t:'concept',u:'16 倍（OVER8=0）提高时钟容差，8 倍（OVER8=1）可把速率提到 usart_ker_ck_pres/8。',s:'§66.5.7, p.5522–5524'},
+{id:'majority',a:'majority vote',en:'Majority voting',zh:'多数表决',t:'concept',u:'位中心三次采样中取多数值；三次不一致即置 NE。',s:'§66.5.7, p.5524'},
+{id:'frame',a:'frame',en:'Frame',zh:'帧',t:'concept',u:'起始位 + 数据位（7/8/9）+ 可选校验位 + 停止位（0.5/1/1.5/2）。',s:'§66.5.4, p.5504'},
+{id:'idle_frame',a:'idle frame',en:'Idle frame',zh:'空闲帧',t:'concept',u:'整帧全为 1（含停止位个数），接收侧据此置 IDLE。',s:'§66.5.4, p.5504'},
+{id:'break_frame',a:'break',en:'Break character',zh:'断开帧',t:'concept',u:'整帧周期持续为 0；断帧结束时发送器插入 2 个停止位。',s:'§66.5.6, p.5514'},
+{id:'lsb',a:'LSB first',en:'Least Significant Bit first',zh:'低位先发',t:'concept',u:'默认数据 LSB 先移出；MSBFIRST=1 时改为 MSB 先发。',s:'§66.5.6, p.5508'},
+{id:'halfduplex',a:'single-wire',en:'Single-wire half duplex',zh:'单线半双工',t:'mode',u:'TX 引脚既发又收，需配置为带外部上拉的复用开漏输出。',s:'§66.5.19, p.5558'},
+{id:'rs485',a:'RS-485 DE',en:'RS-485 driver enable',zh:'RS-485 驱动使能',t:'mode',u:'DEM=1 时由 DE 引脚控制外部收发器方向，DEAT/DEDT 调节前后间隔。',s:'§66.5.16, p.5582'},
+{id:'modbus',a:'Modbus',en:'Modbus RTU / ASCII',zh:'Modbus 通信',t:'mode',u:'RTU 用 RTO 判定块结束；ASCII 用 CR/LF 字符匹配（CMF）判定。',s:'§66.5.12, p.5542'},
+{id:'autonomous',a:'autonomous mode',en:'Autonomous mode',zh:'自主模式',t:'mode',u:'Stop 模式下由 usart_trg 触发收发，按 TDN 计数后硬件清 TE。',s:'§66.5.22, p.5584'},
+{id:'smartcard',a:'Smartcard',en:'Smartcard mode',zh:'智能卡模式',t:'mode',u:'ISO/IEC 7816-3 T=0/T=1；开漏 TX；CK 提供时钟；NACK 表现为帧错误。',s:'§66.5.18, p.5560'},
+{id:'irda',a:'IrDA SIR',en:'IrDA Serial Infrared',zh:'IrDA 红外',t:'mode',u:'逻辑 0 用 3/16 位宽的红外脉冲表示，最高 115.2 kbaud。',s:'§66.5.19, p.5568'},
+{id:'lin',a:'LIN',en:'Local Interconnect Network',zh:'LIN 总线',t:'mode',u:'发送 13 个 0 位的断点；接收侧独立检测 10/11 位断点。',s:'§66.5.14, p.5546'},
+{id:'spi',a:'SPI mode',en:'SPI master/slave',zh:'SPI 模式',t:'mode',u:'同步模式下 USART 可作 SPI 主/从；SPI 模式不支持 NE/FE。',s:'§66.5.15, p.5554'},
+{id:'rto',a:'RTO',en:'Receiver Timeout',zh:'接收超时',t:'concept',u:'RTOR 的 RTO[23:0] 以位时间为单位；到期置 RTOF。',s:'§66.5.17, p.5558'},
+{id:'addr',a:'ADD / ADDM7',en:'Node address',zh:'节点地址',t:'bit',u:'静音模式的 4 位或 7 位地址；低功耗模式下也用于字符匹配唤醒。',s:'§66.8.3, p.5608'},
+{id:'ddre',a:'DDRE',en:'DMA Disable on Receive Error',zh:'接收错误时禁用 DMA',t:'bit',u:'CR3 bit13；0=不禁用（RXNE 保持 0 阻止错误数据进 DMA），1=禁用。',s:'§66.8.4, p.5618'},
+{id:'ovrdis',a:'OVRDIS',en:'Overrun Disable',zh:'禁止溢出检测',t:'bit',u:'CR3 bit12；1 时 ORE 恒为 0，新数据覆盖 RDR。',s:'§66.8.4, p.5618'},
+{id:'eie',a:'EIE',en:'Error Interrupt Enable',zh:'错误中断使能',t:'bit',u:'CR3 bit0；FE/ORE/NE/UDR 任一置位即产生中断。',s:'§66.8.4, p.5616'},
+{id:'i2c',a:'tx/rx FIFO 深度',en:'FIFO depth',zh:'FIFO 深度',t:'concept',u:'RXFT 注释显示：RXFIFO 15 个 + RDR 1 个 = 16 级（表 667 的容量单元格为矢量，未读取）。',s:'§66.8.9, p.5630'},
+{id:'presc_enc',a:'PRESCALER[3:0]',en:'Prescaler encoding',zh:'预分频编码',t:'bit',u:'0000 /1、0001 /2、0010 /4、0011 /6、0100 /8、0101 /10、0110 /12、0111 /16、1000 /32、1001 /64、1010 /128、1011 /256。',s:'§66.8.14, p.5658'},
+{id:'lp_bus',a:'LPUART1',en:'Low-power UART',zh:'低功耗串口',t:'concept',u:'挂在 APB3；无 GTPR/RTOR，BRR 为 20 位且 ≥0x300；每个位只采样一次。',s:'§67.4.8, p.5696'},
+{id:'usart_bus',a:'USART1',en:'USART1',zh:'USART1',t:'concept',u:'挂 APB2（RCC_APB2ENR bit14）；USART2/3、UART4/5 挂 APB1（RCC_APB1ENR1 bit17–20）。',s:'§11.8.35, p.1118–1126'}
+];
+</script>
+<script>
+/* ---------------- 寄存器：位域按 RM0456 §66.8 逐位录入 ---------------- */
+const REGS = [
+{n:'USART_CR1',off:'0x00',rst:'0x0000 0000',d:'FIFO 模式启用（§66.8.1）',f:[
+ ['RXFFIE',31,31,'RW','RXFIFO 满中断使能'],
+ ['TXFEIE',30,30,'RW','TXFIFO 空中断使能'],
+ ['FIFOEN',29,29,'RW','FIFO 使能（仅 UE=0 可写）'],
+ ['M1',28,28,'RW','字长高位'],
+ ['EOBIE',27,27,'RW','块结束中断使能'],
+ ['RTOIE',26,26,'RW','接收超时中断使能'],
+ ['DEAT[4:0]',25,21,'RW','DE 激活到起始位的间隔'],
+ ['DEDT[4:0]',20,16,'RW','停止位结束到 DE 撤销的间隔'],
+ ['OVER8',15,15,'RW','0=16 倍，1=8 倍'],
+ ['CMIE',14,14,'RW','字符匹配中断使能'],
+ ['MME',13,13,'RW','静音模式使能'],
+ ['M0',12,12,'RW','字长低位'],
+ ['WAKE',11,11,'RW','0=空闲线，1=地址标记'],
+ ['PCE',10,10,'RW','校验控制使能'],
+ ['PS',9,9,'RW','0=偶校验，1=奇校验'],
+ ['PEIE',8,8,'RW','校验错误中断使能'],
+ ['TXFNFIE',7,7,'RW','TXFIFO 未满中断使能'],
+ ['TCIE',6,6,'RW','传输完成中断使能'],
+ ['RXFNEIE',5,5,'RW','RXFIFO 非空中断使能'],
+ ['IDLEIE',4,4,'RW','空闲中断使能'],
+ ['TE',3,3,'RW','发送器使能'],
+ ['RE',2,2,'RW','接收器使能'],
+ ['UESM',1,1,'RW','低功耗模式使能'],
+ ['UE',0,0,'RW','USART 使能']
+]},
+{n:'USART_CR1［备用］',off:'0x00',rst:'0x0000 0000',d:'FIFO 模式禁用（§66.8.2）',f:[
+ ['FIFOEN',29,29,'RW','FIFO 使能'],
+ ['M1',28,28,'RW','字长高位'],
+ ['EOBIE',27,27,'RW','块结束中断使能'],
+ ['RTOIE',26,26,'RW','接收超时中断使能'],
+ ['DEAT[4:0]',25,21,'RW','DE 激活间隔'],
+ ['DEDT[4:0]',20,16,'RW','DE 撤销间隔'],
+ ['OVER8',15,15,'RW','0=16 倍，1=8 倍'],
+ ['CMIE',14,14,'RW','字符匹配中断'],
+ ['MME',13,13,'RW','静音模式使能'],
+ ['M0',12,12,'RW','字长低位'],
+ ['WAKE',11,11,'RW','唤醒方式'],
+ ['PCE',10,10,'RW','校验使能'],
+ ['PS',9,9,'RW','奇偶选择'],
+ ['PEIE',8,8,'RW','校验错误中断'],
+ ['TXEIE',7,7,'RW','TXE 中断使能'],
+ ['TCIE',6,6,'RW','传输完成中断'],
+ ['RXNEIE',5,5,'RW','RXNE 中断使能'],
+ ['IDLEIE',4,4,'RW','空闲中断'],
+ ['TE',3,3,'RW','发送器使能'],
+ ['RE',2,2,'RW','接收器使能'],
+ ['UESM',1,1,'RW','低功耗使能'],
+ ['UE',0,0,'RW','USART 使能']
+]},
+{n:'USART_CR2',off:'0x04',rst:'0x0000 0000',d:'帧格式 / 模式（§66.8.3）',f:[
+ ['ADD[7:0]',31,24,'RW','节点地址 / 字符匹配'],
+ ['RTOEN',23,23,'RW','接收超时使能'],
+ ['ABRMOD[1:0]',22,21,'RW','00 起始位 / 01 下降沿 / 10 0x7F / 11 0x55'],
+ ['ABREN',20,20,'RW','自动波特率使能'],
+ ['MSBFIRST',19,19,'RW','1=MSB 先发'],
+ ['DATAINV',18,18,'RW','数据反逻辑'],
+ ['TXINV',17,17,'RW','TX 取反'],
+ ['RXINV',16,16,'RW','RX 取反'],
+ ['SWAP',15,15,'RW','交换 TX/RX 引脚'],
+ ['LINEN',14,14,'RW','LIN 模式使能'],
+ ['STOP[1:0]',13,12,'RW','00=1 01=0.5 10=2 11=1.5'],
+ ['CLKEN',11,11,'RW','CK 引脚使能'],
+ ['CPOL',10,10,'RW','CK 极性'],
+ ['CPHA',9,9,'RW','CK 相位'],
+ ['LBCL',8,8,'RW','最后一位是否输出时钟'],
+ ['LBDIE',6,6,'RW','LIN 断点中断使能'],
+ ['LBDL',5,5,'RW','0=10 位，1=11 位断点'],
+ ['ADDM7',4,4,'RW','0=4 位，1=7 位地址'],
+ ['DIS_NSS',3,3,'RW','忽略 NSS 输入'],
+ ['SLVEN',0,0,'RW','同步从模式使能']
+]},
+{n:'USART_CR3',off:'0x08',rst:'0x0000 0000',d:'模式 / 流控 / DMA（§66.8.4）',f:[
+ ['TXFTCFG[2:0]',31,29,'RW','TXFIFO 阈值'],
+ ['RXFTIE',28,28,'RW','RXFIFO 阈值中断'],
+ ['RXFTCFG[2:0]',27,25,'RW','RXFIFO 阈值'],
+ ['TCBGTIE',24,24,'RW','保护时间前完成中断'],
+ ['TXFTIE',23,23,'RW','TXFIFO 阈值中断'],
+ ['SCARCNT[2:0]',19,17,'RW','智能卡重试次数'],
+ ['DEP',15,15,'RW','DE 极性'],
+ ['DEM',14,14,'RW','DE 模式'],
+ ['DDRE',13,13,'RW','接收错误时禁用 DMA'],
+ ['OVRDIS',12,12,'RW','禁止溢出检测'],
+ ['ONEBIT',11,11,'RW','1=单次采样，NE 不置位'],
+ ['CTSIE',10,10,'RW','CTS 中断使能'],
+ ['CTSE',9,9,'RW','CTS 流控使能'],
+ ['RTSE',8,8,'RW','RTS 流控使能'],
+ ['DMAT',7,7,'RW','DMA 发送使能'],
+ ['DMAR',6,6,'RW','DMA 接收使能'],
+ ['SCEN',5,5,'RW','智能卡模式'],
+ ['NACK',4,4,'RW','智能卡 NACK'],
+ ['HDSEL',3,3,'RW','单线半双工'],
+ ['IRLP',2,2,'RW','IrDA 低功耗'],
+ ['IREN',1,1,'RW','IrDA 使能'],
+ ['EIE',0,0,'RW','错误中断使能']
+]},
+{n:'USART_BRR',off:'0x0C',rst:'0x0000 0000',d:'波特率（§66.8.5）',f:[
+ ['BRR[15:4]',15,4,'RW','USARTDIV 整数部分'],
+ ['BRR[3:0]',3,0,'RW','OVER8=0 四位小数；OVER8=1 时 BRR[2:0]=>>1，bit3 必须为 0']
+]},
+{n:'USART_GTPR',off:'0x10',rst:'0x0000 0000',d:'智能卡保护时间 / IrDA 预分频（§66.8.6）',f:[
+ ['GT[7:0]',15,8,'RW','保护时间（波特周期数）'],
+ ['PSC[7:0]',7,0,'RW','IrDA 预分频 / 智能卡 ×2']
+]},
+{n:'USART_RTOR',off:'0x14',rst:'0x0000 0000',d:'接收超时（§66.8.7）',f:[
+ ['BLEN[7:0]',31,24,'RW','智能卡 T=1 块长度'],
+ ['RTO[23:0]',23,0,'RW','超时值，以位时间为单位']
+]},
+{n:'USART_RQR',off:'0x18',rst:'0x0000 0000',d:'请求寄存器（§66.8.8）',f:[
+ ['TXFRQ',4,4,'W','清空 TXFIFO / 置 TXE'],
+ ['RXFRQ',3,3,'W','清空 RXFIFO / 清 RXNE'],
+ ['MMRQ',2,2,'W','进入静音'],
+ ['SBKRQ',1,1,'W','发送断点'],
+ ['ABRRQ',0,0,'W','重启自动波特率']
+]},
+{n:'USART_ISR',off:'0x1C',rst:'0x0XX0 00C0',d:'状态（FIFO 启用，§66.8.9）',f:[
+ ['TXFT',27,27,'R','TXFIFO 达阈值'],
+ ['RXFT',26,26,'R','RXFIFO 达阈值'],
+ ['TCBGT',25,25,'R','保护时间前发送完成'],
+ ['RXFF',24,24,'R','RXFIFO 满'],
+ ['TXFE',23,23,'R','TXFIFO 空'],
+ ['REACK',22,22,'R','接收使能确认'],
+ ['TEACK',21,21,'R','发送使能确认'],
+ ['RWU',19,19,'R','静音中'],
+ ['SBKF',18,18,'R','已请求断点'],
+ ['CMF',17,17,'R','字符匹配'],
+ ['BUSY',16,16,'R','RX 线正在接收'],
+ ['ABRF',15,15,'R','自动波特率完成'],
+ ['ABRE',14,14,'R','自动波特率失败'],
+ ['UDR',13,13,'R','SPI 从机下溢'],
+ ['EOBF',12,12,'R','块结束'],
+ ['RTOF',11,11,'R','接收超时'],
+ ['CTS',10,10,'R','CTS 引脚状态反相'],
+ ['CTSIF',9,9,'R','CTS 翻转'],
+ ['LBDF',8,8,'R','LIN 断点'],
+ ['TXFNF',7,7,'R','TXFIFO 未满（复位=1）'],
+ ['TC',6,6,'R','传输完成（复位=1）'],
+ ['RXFNE',5,5,'R','RXFIFO 非空'],
+ ['IDLE',4,4,'R','空闲线'],
+ ['ORE',3,3,'R','溢出'],
+ ['NE',2,2,'R','噪声'],
+ ['FE',1,1,'R','帧错误'],
+ ['PE',0,0,'R','校验错误']
+]},
+{n:'USART_ISR［备用］',off:'0x1C',rst:'0x0000 00C0',d:'状态（FIFO 禁用，§66.8.10）',f:[
+ ['TCBGT',25,25,'R','保护时间前发送完成'],
+ ['REACK',22,22,'R','接收使能确认'],
+ ['TEACK',21,21,'R','发送使能确认'],
+ ['RWU',19,19,'R','静音中'],
+ ['SBKF',18,18,'R','已请求断点'],
+ ['CMF',17,17,'R','字符匹配'],
+ ['BUSY',16,16,'R','RX 线正在接收'],
+ ['ABRF',15,15,'R','自动波特率完成'],
+ ['ABRE',14,14,'R','自动波特率失败'],
+ ['UDR',13,13,'R','SPI 从机下溢'],
+ ['EOBF',12,12,'R','块结束'],
+ ['RTOF',11,11,'R','接收超时'],
+ ['CTS',10,10,'R','CTS 状态'],
+ ['CTSIF',9,9,'R','CTS 翻转'],
+ ['LBDF',8,8,'R','LIN 断点'],
+ ['TXE',7,7,'R','TDR 空（复位=1）'],
+ ['TC',6,6,'R','传输完成（复位=1）'],
+ ['RXNE',5,5,'R','RDR 非空'],
+ ['IDLE',4,4,'R','空闲线'],
+ ['ORE',3,3,'R','溢出'],
+ ['NE',2,2,'R','噪声'],
+ ['FE',1,1,'R','帧错误'],
+ ['PE',0,0,'R','校验错误']
+]},
+{n:'USART_ICR',off:'0x20',rst:'0x0000 0000',d:'写 1 清除（§66.8.11）',f:[
+ ['CMCF',17,17,'W','清 CMF'],
+ ['UDRCF',13,13,'W','清 UDR'],
+ ['EOBCF',12,12,'W','清 EOBF'],
+ ['RTOCF',11,11,'W','清 RTOF'],
+ ['CTSCF',9,9,'W','清 CTSIF'],
+ ['LBDCF',8,8,'W','清 LBDF'],
+ ['TCBGTCF',7,7,'W','清 TCBGT'],
+ ['TCCF',6,6,'W','清 TC'],
+ ['TXFECF',5,5,'W','清 TXFE'],
+ ['IDLECF',4,4,'W','清 IDLE'],
+ ['ORECF',3,3,'W','清 ORE'],
+ ['NECF',2,2,'W','清 NE（正文称 NFCF）'],
+ ['FECF',1,1,'W','清 FE'],
+ ['PECF',0,0,'W','清 PE']
+]},
+{n:'USART_RDR',off:'0x24',rst:'0x0000 0000',d:'接收数据，只读（§66.8.12）',f:[
+ ['RDR[8:0]',8,0,'R','接收数据（启用校验时 MSB 为校验位）']
+]},
+{n:'USART_TDR',off:'0x28',rst:'0x0000 0000',d:'发送数据（§66.8.13）',f:[
+ ['TDR[8:0]',8,0,'W/R','待发送数据；仅在 TXE/TXFNF=1 时可写']
+]},
+{n:'USART_PRESC',off:'0x2C',rst:'0x0000 0000',d:'预分频，仅 UE=0 可写（§66.8.14）',f:[
+ ['PRESCALER[3:0]',3,0,'RW','1/2/4/6/8/10/12/16/32/64/128/256']
+]},
+{n:'USART_AUTOCR',off:'0x30',rst:'0x8000 0000',d:'自主模式（§66.8.15）',f:[
+ ['TRIGSEL[3:0]',22,19,'RW','选择 usart_trg0…15'],
+ ['IDLEDIS',18,18,'RW','1=不发送空闲帧'],
+ ['TRIGEN',17,17,'RW','触发使能'],
+ ['TRIGPOL',16,16,'RW','0=上升沿，1=下降沿'],
+ ['TDN[15:0]',15,0,'RW','待发送数据个数']
+]}
+];
+</script>
+<script>
+/* ---------------- 场景：每个场景自带时间轴、波形与步骤 ---------------- */
+function parityBit(val,bits,mode){
+  let ones=0; for(let i=0;i<bits;i++) ones+=(val>>i)&1;
+  return mode==='even' ? (ones%2) : (ones%2?0:1);
+}
+function mk(id,name,color,segs,marks){return {id,name,color,segs,marks:marks||[]};}
+const C={tx:'#ff9f45',rx:'#fbbf24',flag:'#a78bfa',err:'#ff6b6b',clk:'#2dd4bf',bus:'#7dd3fc',ok:'#4ade80'};
+
+/* 1. 发送：8N1 帧结构与 TX 路径 */
+function sceneTx(cfg){
+  const bt=cfg.over8?8:16, par=cfg.parity!=='none', n=cfg.dataBits-(par?1:0);
+  const data=0x55, pb=par?parityBit(data,n,cfg.parity):0;
+  const tStart=bt, tWrite=0, tShift=bt;
+  let t=tStart, segs=[[0,tStart,1],[t,t+bt,0]], marks=[{t:t+bt/2,label:'启动 SB',kind:'start'}];
+  t+=bt;
+  const dataSegs=[];
+  for(let i=0;i<n;i++){
+    const v=(data>>i)&1;
+    segs.push([t,t+bt,v]); dataSegs.push([t,v]);
+    marks.push({t:t+bt/2,label:'D'+i,kind:'bit'});
+    t+=bt;
+  }
+  let tPar=null;
+  if(par){ tPar=t; segs.push([t,t+bt,pb]); marks.push({t:t+bt/2,label:'P',kind:'bit'}); t+=bt; }
+  const tStop=t, stopT=cfg.stop*bt;
+  t+=stopT;
+  segs.push([tStop,t,1]); marks.push({t:tStop+stopT/2,label:'停止位',kind:'stop'});
+  const tEnd=t;
+  segs.push([t,t+10*bt,1]);
+  const total=t+10*bt;
+
+  const txe=[[0,tShift,0],[tShift,total,1]];
+  const tc=[[0,tEnd,0],[tEnd,total,1]];
+
+  const steps=[
+    {t:tWrite,title:'写 TDR：TXE 从 1 变 0',desc:'软件把待发送字节写入 <code>TDR</code>。TDR 满时 <code>TXE=0</code>（FIFO 模式下是 <code>TXFNF</code>），表示暂时不要再写。',note:'手册：TDR 内容转入移位寄存器后 TXE 才置 1（§66.8.10, p.5648）。',hi:['TDR','tx_shift','TXE'],regs:['USART_TDR','USART_ISR［备用］']},
+    {t:tStart,title:'装入移位寄存器：TXE=1，起始位同时开始',desc:'并行字被搬进发送移位寄存器，<code>TXE</code> 回 1，发送器立刻拉低 TX 发出起始位。硬件上这两件事发生在同一个位边界，所以本步同时发生。',note:'TE=1 且 TXE=1 时发送器从下一个位边界开始输出（§66.5.6, p.5508）。',hi:['TDR','tx_shift','TXE','USART_TX'],regs:['USART_ISR［备用］','USART_TDR']},
+    {t:tStart+bt+bt*Math.floor(n/2),title:'数据位：LSB 先出',desc:'本例发送 <code>0x55</code>，图中 D0…D'+(n-1)+' 依次出现。默认 LSB 优先；<code>MSBFIRST=1</code> 时改为 MSB 先出。',note:'数据方向由 CR2 的 MSBFIRST（bit19）控制（§66.8.3, p.5608）。',hi:['tx_shift','USART_TX'],regs:['USART_CR2']}
+  ];
+  if(par) steps.push({t:tPar,title:'校验位：由硬件生成',desc:'<code>PCE=1</code> 时硬件在数据位之后插入校验位：<code>PS=0</code> 偶校验、<code>PS=1</code> 奇校验。校验位占用 MSB 位置。',note:'写入 TDR 的最高位在启用校验时无效，被校验位取代（§66.8.13, p.5656）。',hi:['tx_control'],regs:['USART_CR1']});
+  steps.push(
+    {t:tStop,title:'停止位：高电平',desc:'停止位长度由 <code>STOP[1:0]</code> 选择 0.5 / 1 / 1.5 / 2 个位时间。接收方在停止位采样，用来判断帧是否完整。',note:'接收侧 1 个停止位在第 8/9/10 次采样点采样（§66.5.7, p.5528）。',hi:['tx_control','USART_TX'],regs:['USART_CR2']},
+    {t:tEnd,title:'TC=1：整帧发送完成',desc:'最后一帧的停止位结束且 TXE=1 时，<code>TC</code> 置位。注意 <b>TXE 早就为 1</b>，TC 要等到移位寄存器真正发完。',note:'写 TDR 或 ICR 的 TCCF 可清 TC；DMA 结束前不要关 USART（§66.8.9, p.5638）。',hi:['ISR','TXE'],regs:['USART_ISR［备用］','USART_ICR']}
+  );
+  return {unit:'tick',bt,total,lanes:[
+    mk('USART_TX','USART_TX',C.tx,segs,marks),
+    mk('TXE','TXE',C.flag,txe,[{t:tShift,label:'TXE↑',kind:'flag'}]),
+    mk('TC','TC',C.ok,tc,[{t:tEnd,label:'TC↑',kind:'flag'}])
+  ],steps};
+}
+
+/* 2. 接收：起始位检测与 16 倍过采样 */
+function sceneRx(cfg){
+  const bt=cfg.over8?8:16, par=cfg.parity!=='none', n=cfg.dataBits-(par?1:0);
+  const data=0x55, pb=par?parityBit(data,n,cfg.parity):0;
+  const tEdge=6;
+  let t=tEdge, segs=[[0,tEdge,1],[t,t+bt,0]];
+  const marks=[];
+  const samples=[];
+  const addSamples=(st)=>{ if(!cfg.over8) [8,9,10].forEach(o=>samples.push(st+o)); else samples.push(st+bt/2); };
+  if(!cfg.over8){ [3,5,7,8,9,10].forEach(o=>samples.push(t+o)); }
+  else { samples.push(t+bt/2); }
+  t+=bt;
+  for(let i=0;i<n;i++){ const v=(data>>i)&1; segs.push([t,t+bt,v]); addSamples(t); t+=bt; }
+  if(par){ segs.push([t,t+bt,pb]); addSamples(t); t+=bt; }
+  const tStop=t;
+  t+=cfg.stop*bt;
+  segs.push([tStop,t,1]);
+  if(cfg.stop===1.5&&!cfg.over8){ [16,17,18].forEach(o=>samples.push(tStop+o)); }
+  else { addSamples(tStop); }
+  /* 2 个停止位：FE 只看第一个停止位，RXNE 在第一个停止位结束就置位 */
+  const tRxne=cfg.stop===2?tStop+bt:t;
+  const tEnd=t; segs.push([t,t+8*bt,1]);
+  const total=t+8*bt;
+  const busy=[[0,tEdge+bt,0],[tEdge+bt,tEnd,1],[tEnd,total,0]];
+  const rxne=[[0,tRxne,0],[tRxne,total,1]];
+  const sp=cfg.over8?'8 倍':'16 倍';
+
+  const steps=[
+    {t:0,title:'RX 空闲：线路保持高',desc:'接收器使能（<code>RE=1</code>）后持续监控 RX。空闲时线路为逻辑 1，接收器等待下降沿。',note:'RE=1 才开始搜索起始位（§66.8.1, p.5598）。',hi:['USART_RX','m_rxdet'],regs:['USART_CR1']},
+    {t:tEdge,title:'下降沿：起始位候选',desc:'检测到下降沿后，接收器按 '+sp+'过采样计数：'+(cfg.over8?'在第 2/8、3/8、3/8 的位置刻度处做三次采样（图 807）':'在第 <b>3、5、7</b> 个采样点做第一次三选二判定')+'。',note:'起始位检测序列：1 1 1 0 X 0 X 0 X 0 X 0 X 0 X 0；16 倍与 8 倍的检测序列相同（§66.5.7, p.5514）。',hi:['start_detect','sample_points','USART_RX'],regs:['USART_CR1','USART_CR3']},
+    {t:tEdge+8,title:'第二次三采样：'+(cfg.over8?'位中心':'第 8、9、10 点'),desc:(cfg.over8?'8 倍过采样下，采样点位置见图 807 的 2/8、3/8、3/8 刻度；手册正文未给出编号，本图不臆造三个编号。':'紧接着在第 8、9、10 个采样点做第二次三选二判定。')+'两次都满足“至少两位为 0”才确认起始位。',note:'三次全 0 则确认；满足“至少 2/3 为 0”但非全 0，则确认并置 NE（§66.5.7, p.5516）。',hi:['start_detect','sample_points'],regs:['USART_CR3']},
+    {t:tEdge+bt,title:'起始位确认：BUSY=1',desc:'起始位成立后 <code>BUSY</code> 置位，接收器进入逐位采样；若采样序列不完整或不成立，接收器回空闲且不置任何标志。',note:'BUSY 表示 RX 线上正在接收（§66.8.9, p.5634）。',hi:['ISR','start_detect'],regs:['USART_ISR［备用］']},
+    {t:tEdge+bt*2,title:'数据位：位中心三采样',desc:'每个数据位在'+(cfg.over8?'位中心（8 倍采样）':'第 <b>8、9、10</b> 次采样点')+'取值并多数表决。<code>ONEBIT=1</code> 时改为位中心只采一次，NE 永不置位。',note:'16 倍采样点位置为 6/16、7/16、7/16（图 806）；8 倍见图 807（§66.5.7, p.5524）。',hi:['sample_points','rx_shift','RXNE'],regs:['USART_CR3','USART_ISR［备用］']},
+    {t:tRxne,title:'停止位结束：RXNE=1',desc:(cfg.stop===2?'第一个停止位结束时，':'停止位采样完成后，')+'移位寄存器的内容转入 <code>RDR</code>，<code>RXNE</code> 置位；读 RDR 或写 RXFRQ 清除。若停止位被采到 0，则同时置 <code>FE</code>。',note:cfg.stop===2?'2 个停止位时，RXNE 在第一个停止位结束就置位；FE 也只检查第一个停止位，第二个停止位不做帧错误检查（§66.5.7, p.5528）。':'1.5 个停止位时在第 16、17、18 次采样点采样，FE 在 1.5 个停止位结束时随 RXNE 置位（§66.5.7, p.5528）。',hi:['RDR','RXNE','ISR'],regs:['USART_ISR［备用］','USART_RDR']}
+  ];
+  return {unit:'tick',bt,total,lanes:[
+    mk('USART_RX','USART_RX',C.rx,segs,marks),
+    mk('BUSY','BUSY',C.flag,busy,[{t:tEdge+bt,label:'BUSY↑',kind:'flag'}]),
+    mk('RXNE','RXNE',C.ok,rxne,[{t:tRxne,label:'RXNE↑',kind:'flag'}])
+  ],samples,steps};
+}
+
+/* 3. 波特率：PRESC → BRR → 位时钟 */
+function sceneBaud(cfg){
+  const bt=cfg.over8?8:16;
+  const total=bt*6;
+  const ker=[],pre=[],samp=[];
+  for(let t=0;t<total;t+=4) ker.push([t,t+2,1],[t+2,t+4,0]);
+  for(let t=0;t<total;t+=8) pre.push([t,t+4,1],[t+4,t+8,0]);
+  for(let b=0;b<6;b++) for(let k=0;k<bt;k++){ const t=b*bt+k; samp.push([t,t+0.6,1]); }
+  const bits=[[0,bt,0],[bt,bt*2,1],[bt*2,bt*3,0],[bt*3,bt*6,1]];
+  const steps=[
+    {t:0,title:'usart_ker_ck 先过 PRESC',desc:'内核时钟经 <code>PRESC.PRESCALER[3:0]</code> 分频得到 <code>usart_ker_ck_pres</code>（图中按 /2 绘制）。分频值只能取 1/2/4/6/8/10/12/16/32/64/128/256，写非法值时硬件强制为 /256。',note:'PRESC 偏移 0x2C，仅 UE=0 可写（§66.8.14, p.5658）。',hi:['PRESC','usart_ker_ck'],regs:['USART_PRESC']},
+    {t:bt,title:'算 USARTDIV：整数 + 小数',desc:'手册算例：<code>usart_ker_ck_pres = 8 MHz</code>、目标 9600 波特、16 倍过采样 → <code>USARTDIV = 8 000 000 / 9600 = 833.33</code>，取 833 = <b>0x0341</b>。',note:'8 倍时手册例：USARTDIV = 2 × 8 000 000 / 9600 = 1666.66 → 1667 = 0x683（§66.5.8, p.5530）。',hi:['USARTDIV','BRR'],regs:['USART_BRR']},
+    {t:bt*2,title:'写进 BRR：定点编码',desc:'16 倍：<code>BRR = USARTDIV</code>；8 倍：<code>BRR[2:0] = USARTDIV[3:0] >> 1</code>，且 <code>BRR[3]</code> 必须为 0。上例 8 倍的 USARTDIV=0x683 → BRR=0x681。',note:'BRR[15:4] 是整数部分、BRR[3:0] 是小数部分；USARTDIV 必须 ≥16（§66.8.5, p.5622）。',hi:['BRR','baud_counter'],regs:['USART_BRR']},
+    {t:bt*3,title:'位时钟与 16 倍采样时钟',desc:'波特率发生器用 <code>usart_ker_ck_pres</code> 与 BRR 产生位时钟；16 倍采样时每位有 16 个采样节拍，8 倍时 8 个。收发共用同一个波特率。',note:'8 倍最高速率 usart_ker_ck_pres/8，16 倍为 /16（§66.5.7, p.5522）。',hi:['baud_counter','sample_points'],regs:['USART_BRR','USART_CR1']},
+    {t:bt*4,title:'误差从哪来：量化 + 时钟',desc:'BRR 只能表示有限小数，因此存在量化误差；此外还有发送器误差、接收器本地振荡器偏差、传输线偏差、低功耗唤醒采样偏差。手册用一张容差表判定能否正常接收。',note:'判据：DTRA + DQUANT + DREC + DTCL + DWU < 接收器容差；容差表在 PDF 中为矢量，未读取数值（§66.5.9, p.5532–5534）。',hi:['USARTDIV','baud_counter'],regs:['USART_BRR']}
+  ];
+  return {unit:'tick',bt,total,lanes:[
+    mk('usart_ker_ck','usart_ker_ck',C.clk,ker),
+    mk('usart_ker_ck_pres','ker_ck_pres (/2)',C.clk,pre),
+    mk('sample','16× 采样节拍',C.flag,samp),
+    mk('bits','TX 位单元',C.tx,bits)
+  ],steps};
+}
+
+/* 4. 中断：TXE / TC / RXNE / IDLE 与 usart_it */
+function sceneIrq(cfg){
+  const N=8;
+  const txe=[[0,0.6,1],[0.6,1,0],[1,N,1]];
+  const tc=[[0,4,0],[4,5,1],[5,N,0]];
+  const rxne=[[0,2,0],[2,3.2,1],[3.2,N,0]];
+  const idle=[[0,6,0],[6,7.4,1],[7.4,N,0]];
+  const irq=[[0,2,0],[2,2.5,1],[2.5,4,0],[4,4.5,1],[4.5,6,0],[6,6.4,1],[6.4,N,0]];
+  const steps=[
+    {t:0,title:'TXE=1：请求写数据',desc:'复位后 <code>TXE=1</code>（ISR 复位值 bit7 为 1）。软件在第一个事件处写 TDR，TXE 随即清零。本场景 TXE 用轮询，<b>不使能 TXEIE</b>，所以它不参与下面的中断线。',note:'ISR 复位值 0x0000 00C0：bit7 TXE 与 bit6 TC 复位为 1（§66.8.9, p.5630）。',hi:['TXE','ISR'],regs:['USART_ISR［备用］','USART_CR1']},
+    {t:1,title:'TDR → 移位寄存器：TXE 回 1',desc:'TXE 再次置 1，表示可以写下一个字节。若改用中断方式，就在此刻让 TXEIE 触发发送中断；否则轮询 TXE 即可。',note:'TXE 与 TC 的区别：前者只说明 TDR 空，后者要求移位寄存器也发完（§66.8.9, p.5638）。',hi:['TXE','tx_shift'],regs:['USART_CR1','USART_ISR［备用］']},
+    {t:2,title:'收到字节：RXNE=1 并进中断',desc:'<code>RXNEIE=1</code> 时 RXNE 触发中断；读 RDR 即清 RXNE。注意 <code>ORE</code> 与 RXNE 共用同一个中断使能位。',note:'FIFO 模式对应 RXFNE/RXFNEIE；ORE=1 也会进入同一中断（§66.8.1, p.5596）。',hi:['RXNE','usart_it','ISR'],regs:['USART_CR1','USART_ISR［备用］','USART_RDR']},
+    {t:4,title:'TC=1：整帧发完并进中断',desc:'最后一帧停止位结束且 TXE=1，<code>TC</code> 置位。<code>TCIE=1</code> 时进中断；写 TDR 或向 ICR 的 TCCF 写 1 清除。',note:'DMA 发送完成后必须等 TC=1 才能关 USART 或进低功耗（§66.5.20, p.5574）。',hi:['TC','usart_it'],regs:['USART_ISR［备用］','USART_ICR']},
+    {t:5,title:'清 TC：TCCF 写 1',desc:'向 <code>ICR.TCCF</code> 写 1 清 TC，不写 TDR——这样 TXE 不会被再次拉低，便于观察“清标志”和“写数据”是两件事。',note:'写 TDR 也能清 TC，但会同时让 TXE 变 0，两种写法效果不同（§66.8.9, p.5638）。',hi:['TC','ISR'],regs:['USART_ICR','USART_ISR［备用］']},
+    {t:6,title:'线路空闲：IDLE=1 并进中断',desc:'接收完一帧后线路保持高电平一个整帧时间，<code>IDLE</code> 置位。<code>IDLEIE=1</code> 时进中断，常用于“不定长帧结束”判定。',note:'IDLE 在下一次 RXNE 置位前不会再次置位；ICR 的 IDLECF 清除（§66.8.9, p.5640）。',hi:['ISR','usart_it'],regs:['USART_CR1','USART_ICR']},
+    {t:7.4,title:'清 IDLE：IDLECF 写 1',desc:'<code>ICR</code> 的每一位对应一个标志，写 1 清除（写 0 无效）。RXNE 例外：读 RDR 清除。',note:'ICR 偏移 0x20，全部为写 1 清零（§66.8.11, p.5652）。',hi:['ISR'],regs:['USART_ICR']}
+  ];
+  return {unit:'event',total:N,lanes:[
+    mk('TXE','TXE',C.flag,txe),mk('TC','TC',C.ok,tc),
+    mk('RXNE','RXNE',C.rx,rxne),mk('IDLE','IDLE',C.bus,idle),
+    mk('usart_it','usart_it',C.flag,irq)
+  ],steps};
+}
+
+/* 5. DMA + IDLE：不定长接收 */
+function sceneDma(cfg){
+  const N=9;
+  const dmar=[[0,0.5,0],[0.5,N,1]];
+  const rxfne=[[0,1,0],[1,1.6,1],[1.6,2,0],[2,2.6,1],[2.6,3,0],[3,3.6,1],[3.6,N,0]];
+  const dmaReq=[[0,1,0],[1,1.3,1],[1.3,2,0],[2,2.3,1],[2.3,3,0],[3,3.3,1],[3.3,N,0]];
+  const idle=[[0,6,0],[6,7.5,1],[7.5,N,0]];
+  const irq=[[0,6,0],[6,6.5,1],[6.5,N,0]];
+  const steps=[
+    {t:0,title:'DMAR=1：接收 DMA 使能',desc:'<code>CR3.DMAR=1</code> 后，每收到一个字节（RXNE/RXFNE 置位）就产生一次 <code>usart_rx_dma</code> 请求，DMA 把 RDR 搬到内存。',note:'DMA 读 RDR 的同时清除 RXNE（§66.5.20, p.5576）。',hi:['usart_rx_dma','RDR','DMAR'],regs:['USART_CR3','USART_ISR［备用］']},
+    {t:1,title:'字节 1：请求 → 搬运 → 标志清',desc:'RXFNE 置位产生 DMA 请求，DMA 读走数据后 RXFNE 自动回落。CPU 完全不参与。',note:'FIFO 模式下请求由 RXFNE 触发；可用 RXFT 阈值降低搬运次数（§66.5.20, p.5576）。',hi:['RXFNE','usart_rx_dma','RXFIFO'],regs:['USART_CR3']},
+    {t:2,title:'字节 2 / 3：连续搬运',desc:'连续字节依次被搬走。此时若 DMA 配置的长度到了，DMA 会停止，剩余数据留在 FIFO 里——必须提前设好缓冲区长度。',note:'FIFO 深度口径 16 级（含 RDR），超过就可能 ORE（§66.8.9, p.5630）。',hi:['RXFNE','usart_rx_dma'],regs:['USART_CR3']},
+    {t:6,title:'线路空闲：IDLE=1',desc:'发送方停止后线路保持高电平，<code>IDLE</code> 置位。<code>IDLEIE=1</code> 进中断，CPU 在此计算“已收字节数 = 缓冲区长度 − DMA 剩余计数”。',note:'IDLE 是“帧结束”的常用判据，但下一次 RXNE 前不会重复置位（§66.8.9, p.5640）。',hi:['ISR','usart_it'],regs:['USART_CR1','USART_ICR']},
+    {t:7.5,title:'收尾：清 IDLE，重建 DMA',desc:'写 <code>IDLECF</code> 清 IDLE，重新装载 DMA 计数。若要进低功耗，先确认 <code>TC=1</code>，收发器真正空闲后再关时钟。',note:'DMA 传输结束前不得清 DMAT/DMAR（§66.5.20, p.5574）。',hi:['ISR','usart_rx_dma'],regs:['USART_ICR','USART_CR3']}
+  ];
+  return {unit:'event',total:N,lanes:[
+    mk('DMAR','DMAR',C.ok,dmar),mk('RXFNE','RXFNE',C.rx,rxfne),
+    mk('usart_rx_dma','rx_dma',C.err,dmaReq),mk('IDLE','IDLE',C.bus,idle),
+    mk('usart_it','usart_it',C.flag,irq)
+  ],steps};
+}
+
+/* 6. 错误：ORE / FE / NE / PE */
+function sceneErr(cfg){
+  const N=10;
+  const rx=[[0,1,1],[1,1.8,0],[1.8,2.6,1],[2.6,3.4,0],[3.4,4.2,1],[4.2,5,0],[5,5.8,1],[5.8,6.6,0],[6.6,7.4,1],[7.4,8.2,0],[8.2,N,1]];
+  const rxne=[[0,1.7,0],[1.7,N,1]];
+  const ore=[[0,3.9,0],[3.9,9.2,1],[9.2,N,0]];
+  const fe=[[0,5.7,0],[5.7,9.2,1],[9.2,N,0]];
+  const ne=[[0,7.3,0],[7.3,9.2,1],[9.2,N,0]];
+  const pe=[[0,8.1,0],[8.1,9.2,1],[9.2,N,0]];
+  const steps=[
+    {t:1.7,title:'正常帧：RXNE=1（软件没读）',desc:'停止位正确、校验正确、三次采样一致 → 只有 <code>RXNE</code> 置位。这里故意不读 RDR：RXNE 保持 1，下一帧到达时就会溢出。',note:'RXNE 在停止位结束后置位；读 RDR 才清除（§66.5.7, p.5528）。',hi:['RXNE','RDR'],regs:['USART_ISR［备用］','USART_RDR']},
+    {t:3.9,title:'ORE：上一字节还没读',desc:'RXNE 仍为 1 时又收到新字节，<code>ORE</code> 置位。RDR 里的旧数据仍可读，但移位寄存器被覆盖，溢出期间的数据全部丢失。',note:'FIFO 开时条件变为 RXFIFO 已满且移位寄存器还有数据待传（§66.5.7, p.5520）。',hi:['ISR','RDR'],regs:['USART_ISR［备用］','USART_ICR','USART_CR3']},
+    {t:5.7,title:'FE：停止位被采到 0',desc:'预期时刻没有识别出停止位 → <code>FE</code> 置位，同时数据仍被送入 RDR（无效数据也进 FIFO）。断点字符、失步、噪声过大都会触发。',note:'0.5 个停止位不采样，因此智能卡接收时无法检测 FE（§66.5.7, p.5526–5528）。',hi:['USART_RX','RDR','ISR'],regs:['USART_ISR［备用］','USART_CR2']},
+    {t:7.3,title:'NE：三采样不一致',desc:'位中心三次采样并非完全相同 → <code>NE</code> 置位，并按多数值取该位。<code>ONEBIT=1</code> 时只采一次，NE 永远不会置位。',note:'NE 在 RXNE 的上升沿置位；单字节通信时靠 RXNE 中断感知（§66.5.7, p.5524）。',hi:['sample_points','ISR'],regs:['USART_CR3','USART_ISR［备用］']},
+    {t:8.1,title:'PE：校验失败',desc:'接收到的校验位与本地计算不符 → <code>PE</code> 置位。<code>PEIE=1</code> 时可单独进中断。',note:'校验位占用 MSB：M=1 时为第 9 位，M=0 时为第 8 位（§66.5.13, p.5544）。',hi:['ISR','rx_shift'],regs:['USART_CR1','USART_ISR［备用］']},
+    {t:9.2,title:'清四个错误：ORECF / FECF / NECF / PECF',desc:'四个错误都在同一时刻由 <code>ICR</code> 写 1 清除。注意 <code>RXNE</code> 不受 ICR 影响——它只能读 RDR 或写 RXFRQ 清除，所以图中仍然保持 1。',note:'ICR 全部为写 1 清零；RXNE 的清除路径不同（§66.8.11, p.5652；§66.8.8, p.5628）。',hi:['ISR','RXNE'],regs:['USART_ICR','USART_ISR［备用］']}
+  ];
+  return {unit:'event',total:N,lanes:[
+    mk('USART_RX','USART_RX',C.rx,rx),mk('RXNE','RXNE',C.ok,rxne),
+    mk('ORE','ORE',C.err,ore),mk('FE','FE',C.err,fe),
+    mk('NE','NE',C.err,ne),mk('PE','PE',C.err,pe)
+  ],steps};
+}
+
+const SCENES=[
+  {id:'tx',group:'发送',name:'发送一帧：TDR → 移位寄存器 → TX',build:sceneTx,
+   code:'tx',
+   signals:[['USART_TX','被发送的一帧：起始位低、数据 LSB 先出、停止位高。'],
+            ['TXE','TDR 空。写 TDR 清零，数据转入移位寄存器后置 1。'],
+            ['TC','整帧发完且 TXE=1 时置 1；写 TDR 或 TCCF 清零。']]},
+  {id:'rx',group:'接收',name:'接收一帧：起始位检测与 16 倍过采样',build:sceneRx,
+   code:'rx',
+   signals:[['USART_RX','接收线。下降沿被当作起始位候选。'],
+            ['BUSY','起始位确认后置 1，停止位结束回落。'],
+            ['RXNE','停止位结束时置 1，读 RDR 清除。'],
+            ['采样点（竖虚线）','16 倍：起始位第 3/5/7 与 8/9/10 点；数据/停止位第 8/9/10 点。']]},
+  {id:'baud',group:'时钟',name:'波特率：PRESC → USARTDIV → BRR',build:sceneBaud,
+   code:'baud',
+   signals:[['usart_ker_ck','内核时钟，来自 RCC；与 pclk 相互独立。'],
+            ['ker_ck_pres','经 PRESC 分频后的时钟，直接代入 BRR 公式。'],
+            ['16× 采样节拍','每 16 个节拍一个位时间；8 倍过采样时每 8 个。'],
+            ['TX 位单元','位宽由 BRR 决定；误差即实际位宽与理想位宽的偏差。']]},
+  {id:'irq',group:'中断',name:'中断收发：TXE / TC / RXNE / IDLE',build:sceneIrq,
+   code:'irq',
+   signals:[['TXE','写 TDR 清 0，TDR→移位寄存器后置 1。'],
+            ['TC','最后一帧发完置 1。'],
+            ['RXNE','收到完整帧置 1，读 RDR 清 0。'],
+            ['IDLE','线路空闲一帧时间后置 1。'],
+            ['usart_it','以上任一使能的标志都会拉高全局中断。']]},
+  {id:'dma',group:'DMA',name:'DMA + IDLE：不定长帧接收',build:sceneDma,
+   code:'dma',
+   signals:[['DMAR','CR3 bit6，接收 DMA 使能。'],
+            ['RXFNE','接收 FIFO 非空，触发 DMA 请求。'],
+            ['usart_rx_dma','DMA 读 RDR 的请求线。'],
+            ['IDLE','帧结束判据，CPU 用它计算剩余长度。']]},
+  {id:'err',group:'错误',name:'错误标志：ORE / FE / NE / PE',build:sceneErr,
+   code:'err',
+   signals:[['RXNE','每帧结束置 1；未及时读就会引发 ORE。'],
+            ['ORE','溢出：旧数据未读又收新数据。'],
+            ['FE','停止位缺失或被采到 0。'],
+            ['NE','位中心三次采样不一致。'],
+            ['PE','校验位不匹配。']]}
+];
+
+/* ---------------- 代码 ---------------- */
+const CODE=[
+{id:'tx',title:'8N1 轮询发送（寄存器级）',body:
+`/* 1. 时钟：USART1 在 APB2，RCC_APB2ENR.USART1EN = bit14 */
+RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+
+/* 2. 先写 PRESC / BRR，再置 UE（PRESC 只能 UE=0 时写） */
+USART1->PRESC = 0x0000;              /* /1 */
+USART1->BRR   = 0x0341;              /* 8 MHz / 9600，16x：见 §66.5.8 算例 */
+USART1->CR2   = (0u << USART_CR2_STOP_Pos);  /* 1 个停止位 */
+USART1->CR1   = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
+
+/* 3. 逐字节发送：TXE=1 才能写 TDR */
+for (i = 0; i < len; i++) {
+  while (!(USART1->ISR & USART_ISR_TXE_TXFNF)) { }
+  USART1->TDR = buf[i];
+}
+/* 4. 整帧发完看 TC，不是 TXE */
+while (!(USART1->ISR & USART_ISR_TC)) { }`,
+cap:'TXE 只表示 TDR 空；TC 才表示移位寄存器也发完（§66.8.9, p.5638）。代码中的位名以 CMSIS 头文件为准，两种 ISR 版本的位名不同。'},
+{id:'rx',title:'RXNE 中断接收（8N1）',body:
+`/* CR1：RXNEIE=1；FIFO 关闭时 bit5 名为 RXNEIE */
+USART1->CR1 |= USART_CR1_RXNEIE;
+
+void USART1_IRQHandler(void) {
+  uint32_t sr = USART1->ISR;
+  if (sr & USART_ISR_RXNE) {
+    uint8_t b = (uint8_t)USART1->RDR;   /* 读 RDR 即清 RXNE */
+    ring_push(&rx_ring, b);
+  }
+  if (sr & (USART_ISR_ORE | USART_ISR_FE | USART_ISR_NE | USART_ISR_PE)) {
+    /* 错误必须显式写 ICR 清除，否则会反复进中断 */
+    USART1->ICR = USART_ICR_ORECF | USART_ICR_FECF
+                | USART_ICR_NECF  | USART_ICR_PECF;
+  }
+}`,
+cap:'ORE 与 RXNE 共用同一个中断使能位；EIE=1 时错误还会合并成独立错误中断（§66.8.1, p.5596；§66.8.4, p.5616）。'},
+{id:'baud',title:'算 BRR（含 8 倍过采样）',body:
+`/* 手册口径：BRR 值 = USARTDIV，16 倍时 BRR = fck_pres / baud */
+static uint32_t brr_16(uint32_t fck, uint32_t baud) {
+  return (fck + baud / 2) / baud;        /* 例：8e6/9600 = 833 = 0x341 */
+}
+
+/* 8 倍：USARTDIV = 2 * fck / baud；BRR[3]=0，BRR[2:0]=USARTDIV[3:0]>>1 */
+static uint32_t brr_8(uint32_t fck, uint32_t baud) {
+  uint32_t div = (2u * fck + baud / 2) / baud;   /* 例：1667 = 0x683 */
+  uint32_t brr = (div & 0xFFF0u) | ((div & 0x000Fu) >> 1);
+  return brr;                                     /* 例：0x681 */
+}
+
+/* 注意：USARTDIV 必须 >= 16（BRR >= 0x10） */
+USART1->BRR = brr_16(8000000u, 9600u);`,
+cap:'公式与编码取自 §66.5.8 的两个算例与 §66.8.5 的位定义；由于手册公式本体在 PDF 中是矢量图形，这里用的是算例反推并交叉验证的结果（8 MHz/9600 与 48 MHz/921.6k 均自洽）。'},
+{id:'irq',title:'IDLE 中断 + 不定长接收',body:
+`/* 使能 IDLE 中断；收到一帧后线路空闲会置 IDLE */
+USART1->CR1 |= USART_CR1_IDLEIE | USART_CR1_RXNEIE;
+
+volatile uint16_t n;
+void USART1_IRQHandler(void) {
+  if (USART1->ISR & USART_ISR_IDLE) {
+    USART1->ICR = USART_ICR_IDLECF;      /* 写 1 清除 */
+    n = DMA_RX_LEN - DMA1_ChannelX->CNDTR; /* 剩余计数反推已收字节 */
+    frame_ready = 1;
+  }
+  if (USART1->ISR & USART_ISR_RXNE) { (void)USART1->RDR; }
+}`,
+cap:'IDLE 在下一次 RXNE 置位前不会再次置位（§66.8.9, p.5640）；读 RDR 会清 RXNE，二者用途不同。'},
+{id:'dma',title:'DMA 接收 + IDLE 收尾',body:
+`/* 1. 打开 DMA 接收请求 */
+USART1->CR3 |= USART_CR3_DMAR;
+
+/* 2. DMA 通道：外设地址 = &USART1->RDR，方向外设→内存，循环关闭 */
+DMA1_ChannelX->CPAR  = (uint32_t)&USART1->RDR;
+DMA1_ChannelX->CMAR  = (uint32_t)rx_buf;
+DMA1_ChannelX->CNDTR = sizeof rx_buf;
+DMA1_ChannelX->CCR  |= DMA_CCR_EN;
+
+/* 3. 出错时：DDRE=0 时 RXNE 保持 0，错误数据不会进 DMA */
+USART1->CR3 &= ~USART_CR3_DDRE;
+/* 收尾：确认 TC=1 后再关 DMA / 进低功耗 */`,
+cap:'DMA 请求由 RXNE（FIFO 模式 RXFNE）触发；传输结束前不得清 DMAR（§66.5.20, p.5574–5576）。DDRE 语义见 §66.8.4, p.5618。'},
+{id:'err',title:'错误处理：ORE / FE / NE / PE',body:
+`uint32_t sr = USART1->ISR;
+
+if (sr & USART_ISR_ORE) {
+  /* FIFO 关：读 RDR 可救回旧数据；但溢出期间新数据已丢 */
+  (void)USART1->RDR;
+  USART1->ICR = USART_ICR_ORECF;
+}
+if (sr & USART_ISR_FE) USART1->ICR = USART_ICR_FECF;
+if (sr & USART_ISR_NE) USART1->ICR = USART_ICR_NECF;
+if (sr & USART_ISR_PE) USART1->ICR = USART_ICR_PECF;
+
+/* 关闭溢出检测（会静默覆盖数据，慎用） */
+USART1->CR3 |= USART_CR3_OVRDIS;`,
+cap:'ICR 全部为写 1 清零；NE 的清除位在 §66.5.7 正文写作 NFCF，在 §66.8.11 位表中为 NECF（§66.5.7, p.5524；§66.8.11, p.5654）。'}
+];
+</script>
+<script>
+/* ============================================================
+   运行时
+   ============================================================ */
+const $=(s,r)=>(r||document).querySelector(s);
+const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
+const SPEEDS=[{ms:360},{ms:250},{ms:170},{ms:110},{ms:70}];
+const S={scene:0,step:0,t:0,playing:false,autoClear:true,cfg:{dataBits:8,parity:'none',stop:1,over8:false},filterType:'all',tl:null};
+let timer=null;
+function speedIdx(){ return Math.max(1,Math.min(5,+($('#speed').value)||2))-1; }
+function updateSpeedLabel(){
+  const ms=SPEEDS[speedIdx()].ms, tl=S.tl;
+  $('#speedVal').textContent = (tl&&tl.unit==='event')
+    ? '约 '+(250/ms).toFixed(1)+' 事件/s'
+    : '约 '+(1000/ms).toFixed(1)+' tick/s';
+}
+
+function levelAt(lane,t){
+  let v=0;
+  for(const s of lane.segs){ if(t>=s[0]&&t<s[1]) return s[2]; if(t>=s[1]) v=s[2]; }
+  return v;
+}
+function shownSegs(lane){
+  if(S.autoClear) return lane.segs;
+  const s=lane.segs.map(x=>x.slice());
+  if(s.length && s[s.length-1][2]===1) return s;
+  for(let i=s.length-1;i>=0;i--){ if(s[i][2]===1){ s[i][1]=S.tl.total; break; } }
+  return s;
+}
+function rebuild(reset){
+  S.tl=SCENES[S.scene].build(S.cfg);
+  if(reset) S.step=0;
+  const st=S.tl.steps[S.step]||S.tl.steps[0];
+  S.t=st.t;
+  renderWaveLegend(); renderStep(); renderStats(); drawWave();
+  renderRegs(); renderSignalNotes(); renderSceneList();
+}
+function selectScene(i){
+  S.scene=i; S.step=0; S.playing=false; clearInterval(timer); $('#btnPlay').textContent='播放';
+  const s=SCENES[i]; $('#sceneGroup').textContent=s.group;
+  renderCode();
+  rebuild(true);
+}
+function renderSceneList(){
+  const box=$('#sceneList'); box.innerHTML='';
+  SCENES.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.className='sbtn'+(i===S.scene?' on':'');
+    b.textContent=s.name; b.title=s.name;
+    b.onclick=()=>selectScene(i);
+    box.appendChild(b);
+  });
+}
+function renderStep(){
+  const s=SCENES[S.scene], tl=S.tl, st=tl.steps[S.step];
+  $('#stepNo').textContent=(S.step+1)+' / '+tl.steps.length;
+  $('#sceneName').textContent=s.group+' · 步进单位：'+({tick:'采样节拍',event:'事件'}[tl.unit]||tl.unit);
+  $('#stepTitle').textContent=st.title;
+  $('#stepDesc').innerHTML=st.desc;
+  $('#stepNote').innerHTML='<b>依据</b> '+st.note;
+  $('#btnTick').textContent=tl.unit==='tick'?'单步节拍':'单步事件';
+  $('#btnTickBit').textContent=tl.unit==='tick'?'下一位':'下一事件';
+  $('#flagNote').textContent=tl.unit==='tick'
+    ? '一个位 = 16（或 8）个采样节拍；竖虚线为采样点，琥珀竖线为当前时刻。点击状态位通道可查含义/清除方式。'
+    : '事件轴：横轴是事件序号，不是时钟周期；琥珀竖线为当前事件。点击状态位通道可查含义/清除方式。';
+  setHighlight(st.hi||[]);
+  updateSpeedLabel();
+  renderRegs();
+  drawWave(); renderStats();
+}
+function setHighlight(ids){
+  const set=new Set(ids||[]);
+  $$('#bdiag [data-t], #bdiag .mod').forEach(el=>{
+    const hit=set.has(el.id)||set.has(el.getAttribute('data-t'));
+    el.classList.toggle('hot',!!hit);
+  });
+}
+function focusTerm(id){
+  const els=$$('#bdiag [data-t="'+id+'"], #bdiag #'+id);
+  setHighlight([]);
+  els.forEach(e=>e.classList.add('hot'));
+}
+function gotoStep(n){
+  const steps=S.tl.steps;
+  S.step=Math.max(0,Math.min(steps.length-1,n));
+  S.t=steps[S.step].t;
+  renderStep();
+}
+function playToggle(){
+  if(S.playing){ clearInterval(timer); S.playing=false; $('#btnPlay').textContent='播放'; return; }
+  S.playing=true; $('#btnPlay').textContent='暂停';
+  const ms=SPEEDS[speedIdx()].ms;
+  timer=setInterval(()=>{
+    const total=S.tl.total;
+    S.t+= S.tl.unit==='tick'?1:0.25;
+    if(S.t>=total){ S.t=total; clearInterval(timer); S.playing=false; $('#btnPlay').textContent='播放'; }
+    drawWave(); renderStats();
+  },ms);
+}
+
+/* ---------------- 波形 ---------------- */
+function fitCanvas(){
+  const cv=$('#wave'); const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||600, h=206;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+function drawWave(){
+  if(!S.tl) return;
+  const {ctx,w,h}=fitCanvas(), tl=S.tl, lanes=tl.lanes;
+  const L=98,R=12,T=10,B=20;
+  const plotW=Math.max(10,w-L-R);
+  const laneH=(h-T-B)/lanes.length;
+  const x=t=>L+ (t/tl.total)*plotW;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#080d12'; ctx.fillRect(0,0,w,h);
+  /* 位栅格 */
+  if(tl.unit==='tick'&&tl.bt&&tl.total/tl.bt<=48){
+    ctx.strokeStyle='rgba(255,255,255,.045)'; ctx.lineWidth=1;
+    for(let t=0;t<=tl.total;t+=tl.bt){ ctx.beginPath(); ctx.moveTo(x(t),T); ctx.lineTo(x(t),h-B); ctx.stroke(); }
+  }
+  /* 采样点 */
+  (tl.samples||[]).forEach(t=>{
+    ctx.strokeStyle='rgba(167,139,250,.38)'; ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(x(t),T); ctx.lineTo(x(t),h-B); ctx.stroke(); ctx.setLineDash([]);
+  });
+  /* 车道 */
+  ctx.font='10px ui-monospace,Consolas,monospace'; ctx.textBaseline='middle';
+  lanes.forEach((ln,i)=>{
+    const yTop=T+i*laneH, yHi=yTop+7, yLo=yTop+laneH-9;
+    const hit=(S.hiLane&&S.hiLane===ln.id);
+    ctx.fillStyle=hit?'#e9dcff':'#7d90a3';
+    ctx.fillText(ln.name,L-8,yTop+laneH/2);
+    ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.beginPath();
+    ctx.moveTo(L,yLo); ctx.lineTo(w-R,yLo); ctx.stroke();
+    ctx.strokeStyle=ln.color; ctx.lineWidth=1.8;
+    const segs=shownSegs(ln);
+    segs.forEach(sg=>{
+      const a=Math.max(0,Math.min(tl.total,sg[0])), b=Math.max(0,Math.min(tl.total,sg[1]));
+      if(b<=a) return;
+      const y=sg[2]?yHi:yLo;
+      ctx.beginPath(); ctx.moveTo(x(a),y); ctx.lineTo(x(b),y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x(b),y); ctx.lineTo(x(b),sg[2]?yLo:yHi); ctx.stroke();
+    });
+    /* 标注 */
+    (ln.marks||[]).forEach(m=>{
+      if(m.t<0||m.t>tl.total) return;
+      const mx=x(m.t);
+      ctx.fillStyle=ln.color; ctx.beginPath(); ctx.arc(mx,yHi-4,2,0,Math.PI*2); ctx.fill();
+      if(laneH>26 && m.kind!=='bit'){
+        ctx.fillStyle='#9fb3c6'; ctx.font='8.5px ui-monospace,Consolas,monospace'; ctx.textAlign='center';
+        ctx.fillText(m.label,mx,yTop+3);
+        ctx.textAlign='left';
+      }
+    });
+  });
+  /* 游标 */
+  const cx=x(Math.max(0,Math.min(tl.total,S.t)));
+  ctx.strokeStyle='#ffb020'; ctx.lineWidth=1.4; ctx.beginPath();
+  ctx.moveTo(cx,T); ctx.lineTo(cx,h-B); ctx.stroke();
+  ctx.fillStyle='#ffb020'; ctx.beginPath(); ctx.moveTo(cx-4,T); ctx.lineTo(cx+4,T); ctx.lineTo(cx,T+6); ctx.closePath(); ctx.fill();
+  /* 轴 */
+  ctx.fillStyle='#586b7e'; ctx.font='9px ui-monospace,Consolas,monospace';
+  ctx.fillText('0',L,h-6);
+  ctx.textAlign='right'; ctx.fillText(tl.unit==='tick'?(tl.total+' tick'):('事件 '+tl.total),w-R,h-6); ctx.textAlign='left';
+}
+function waveLaneAt(e){
+  if(!S.tl) return -1;
+  const cv=$('#wave'), r=cv.getBoundingClientRect();
+  const T=10,B=20,H=206;
+  const laneH=(H-T-B)/S.tl.lanes.length;
+  const i=Math.floor((e.clientY-r.top-T)/laneH);
+  return (i>=0&&i<S.tl.lanes.length)?i:-1;
+}
+function renderWaveLegend(){
+  if(!S.tl) return;
+  const tl=S.tl;
+  let h=tl.lanes.map(l=>'<span><i style="background:'+l.color+'"></i>'+l.name+'</span>').join('');
+  h+='<span><i style="background:#ffb020"></i>当前时刻</span>';
+  if(tl.samples&&tl.samples.length) h+='<span><i style="background:#a78bfa"></i>采样点</span>';
+  const box=$('#waveLegend'); box.innerHTML=h;
+  $$('#waveLegend span').forEach((sp,i)=>{
+    const ln=tl.lanes[i]; if(!ln) return;
+    const f=flagForLane(ln.id);
+    if(f){ sp.style.cursor='pointer'; sp.title='点击查看 '+f.a+' 的置位 / 清除 / 用法'; sp.onclick=()=>openFlag(f.id); }
+  });
+}
+function renderStats(){
+  if(!S.tl) return;
+  const tl=S.tl, t=Math.min(tl.total,S.t);
+  const row=$('#statRow');
+  const flags=['TXE','TC','RXNE','BUSY','IDLE','ORE','FE','NE','PE','usart_it'].filter(id=>tl.lanes.some(l=>l.id===id));
+  let html='<span>t <b>'+t.toFixed(t%1?1:0)+'</b> / '+tl.total+'</span>';
+  if(tl.unit==='tick'&&tl.bt){
+    const bit=Math.floor(t/tl.bt);
+    html+='<span class="f">位 <b>'+(bit+1)+'</b>（共 '+(tl.total/tl.bt).toFixed(1)+'）</span>';
+  }
+  flags.forEach(id=>{
+    const ln=tl.lanes.find(l=>l.id===id);
+    const on=levelAt(ln,t)>0.5;
+    const warn=['ORE','FE','NE','PE'].includes(id);
+    html+='<span class="f '+(on?(warn?'warn':'on'):'')+'">'+id+(on?' 1':' 0')+'</span>';
+  });
+  row.innerHTML=html;
+}
+
+/* ---------------- 术语表 ---------------- */
+function typeBadge(t){ const d=TYPES[t]||['—','bit']; return '<span class="ty '+d[1]+'">'+d[0]+'</span>'; }
+function renderFilters(){
+  const types=['all',...Array.from(new Set(TERMS.map(t=>t.t)))];
+  const box=$('#gFilters'); box.innerHTML='';
+  types.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='gf'+(S.filterType===k?' on':'');
+    b.textContent=k==='all'?'全部':(TYPES[k]?TYPES[k][0]:k);
+    b.onclick=()=>{ S.filterType=k; renderFilters(); renderGlossary(); };
+    box.appendChild(b);
+  });
+}
+function renderGlossary(){
+  const q=($('#gq').value||'').trim().toLowerCase();
+  const list=TERMS.filter(t=>{
+    if(S.filterType!=='all'&&t.t!==S.filterType) return false;
+    if(!q) return true;
+    return (t.a+' '+t.en+' '+t.zh+' '+t.u+' '+t.s).toLowerCase().includes(q);
+  });
+  $('#gBody').innerHTML=list.map(t=>
+    '<tr><td class="ab" data-t="'+t.id+'">'+t.a+'</td><td class="en">'+t.en+'</td><td>'+t.zh+'</td>'+
+    '<td>'+typeBadge(t.t)+'</td><td>'+t.u+'</td><td class="src">'+t.s+'</td></tr>'
+  ).join('');
+  $('#gCount').textContent=list.length+' / '+TERMS.length+' 条';
+  $$('#gBody td.ab').forEach(td=>td.onclick=()=>{ focusTerm(td.getAttribute('data-t')); });
+}
+
+/* ---------------- 寄存器位域 ---------------- */
+function renderRegs(){
+  const wrap=$('#regWrap'), scene=SCENES[S.scene];
+  const hl=new Set((S.tl&&S.tl.steps[S.step]&&S.tl.steps[S.step].regs)||[]);
+  let html='';
+  REGS.forEach(r=>{
+    const on=hl.has(r.n);
+    html+='<div class="reg"><div class="reg-h"><b>'+r.n+'</b><span class="off">'+r.off+'</span>'+
+      '<span class="off">复位 '+r.rst+'</span><span class="d">'+r.d+'</span>'+
+      '<span class="acc" data-reg="'+r.n+'">只看本寄存器</span></div>';
+    [31,15].forEach(hi=>{
+      const lo=hi-15;
+      const rowFields=[];
+      let cur=hi;
+      r.f.filter(f=>f[1]>=lo&&f[2]<=hi).sort((a,b)=>b[1]-a[1]).forEach(f=>{
+        if(f[1]<cur) rowFields.push({rsv:true,hi:cur,lo:f[1]+1});
+        rowFields.push({n:f[0],hi:Math.min(f[1],hi),lo:Math.max(f[2],lo),rw:f[3],d:f[4]});
+        cur=f[2]-1;
+      });
+      if(cur>=lo) rowFields.push({rsv:true,hi:cur,lo});
+      let bits='<div class="bits">';
+      for(let b=hi;b>=lo;b--) bits+='<span class="bit">'+b+'</span>';
+      bits+='</div><div class="fields">';
+      rowFields.forEach(f=>{
+        const span=(f.hi-f.lo+1);
+        const col=hi-f.hi+1;
+        const cls='fld'+(f.rsv?' rsv':'')+(on&&!f.rsv?' hi':'');
+        const txt=f.rsv?'':f.n;
+        const tip=f.rsv?'保留':'';
+        bits+='<div class="'+cls+'" style="grid-column:'+col+' / span '+span+'" '+
+          (f.rsv?'':'data-reg="'+r.n+'" data-bit="'+f.n+'" title="'+tip+'"')+'>'+txt+'</div>';
+      });
+      bits+='</div>';
+      html+=bits;
+    });
+    html+='</div>';
+  });
+  wrap.innerHTML=html;
+  $$('#regWrap .fld[data-reg]').forEach(el=>{
+    const reg=el.getAttribute('data-reg'), bit=el.getAttribute('data-bit');
+    el.onmouseenter=e=>{
+      const r=REGS.find(x=>x.n===reg);
+      const f=r&&r.f.find(x=>x[0]===bit);
+      if(!f) return;
+      showTip(e,'<div class="th"><b>'+bit+'</b><span>'+reg+'</span></div>'+
+        '<div class="kv2">'+(f[4]||'')+'</div>'+
+        '<div class="note2">位 '+f[1]+(f[1]!==f[2]?':'+f[2]:'')+' · '+f[3]+' · 复位 0</div>');
+    };
+    el.onmouseleave=hideTip;
+    el.onclick=()=>{ const t=TERMS.find(x=>x.a.split(' ')[0]===bit); if(t) focusTerm(t.id); };
+  });
+  $$('#regWrap .acc').forEach(el=>{
+    el.onclick=()=>{
+      const reg=el.getAttribute('data-reg');
+      const solo=el.dataset.solo!=='1';
+      el.dataset.solo=solo?'1':'0';
+      $$('#regWrap .reg').forEach(box=>{
+        const b=box.querySelector('.reg-h b').textContent;
+        box.style.display=solo?((b===reg||b===reg+'［备用］')?'':'none'):'';
+      });
+      el.textContent=solo?'显示全部':'只看本寄存器';
+    };
+  });
+}
+
+/* ---------------- 场景信号 ---------------- */
+function renderSignalNotes(){
+  const s=SCENES[S.scene], wrap=$('#sigWrap');
+  let extra='';
+  if(s.id==='rx'){
+    extra = S.cfg.over8
+      ? '<div class="note warn">当前为 8 倍过采样：手册图 807 只给出 2/8、3/8、3/8 的位置刻度，正文未给采样点编号，因此本图只画位中心一条参考线，不臆造三个编号。</div>'
+      : '<div class="note">当前为 16 倍过采样：起始位采样点 3/5/7 与 8/9/10；数据位与停止位采样点 8/9/10（图 806、§66.5.7）。</div>';
+  }
+  if(s.id==='tx'&&S.cfg.parity!=='none'){
+    extra='<div class="note warn">当前 PCE=1：校验位占用 MSB，字长 M 为 '+S.cfg.dataBits+' 位时实际数据位只有 '+(S.cfg.dataBits-1)+' 位（§66.5.13, p.5544）。</div>';
+  }
+  if(s.id==='baud'){
+    extra='<div class="note">算例取自 §66.5.8（p.5530）：8 MHz/9600 → 16 倍 BRR=0x0341；8 倍 USARTDIV=0x683、BRR=0x681。48 MHz/921.6 kbaud → 16 倍 BRR=0x34。</div>';
+  }
+  wrap.innerHTML='<table class="gt"><thead><tr><th style="width:190px">信号</th><th>作用 / 产生条件</th></tr></thead><tbody>'+
+    s.signals.map(x=>'<tr><td class="ab">'+x[0]+'</td><td>'+x[1]+'</td></tr>').join('')+
+    '</tbody></table>'+extra;
+  $('#sigScene').textContent=s.name;
+}
+
+/* ---------------- 实例 / 模式 ---------------- */
+function renderInst(){
+  const bus=[
+    ['USART1','APB2','bit14','RCC_APB2ENR'],
+    ['USART2','APB1','bit17','RCC_APB1ENR1 (0x09C)'],
+    ['USART3','APB1','bit18','RCC_APB1ENR1 (0x09C)'],
+    ['UART4','APB1','bit19','RCC_APB1ENR1 (0x09C)'],
+    ['UART5','APB1','bit20','RCC_APB1ENR1 (0x09C)'],
+    ['LPUART1','APB3','bit6','RCC_APB3ENR (0x0A8)']
+  ];
+  const diff=[
+    ['同步模式 / CK','支持（主/从，CLKEN/CPOL/CPHA/LBCL）','无'],
+    ['LIN 模式','支持（LINEN、LBDL、LBDF）','无'],
+    ['智能卡','支持（SCEN、NACK、GT、SCARCNT）','无'],
+    ['IrDA SIR','支持（IREN/IRLP、PSC）','无'],
+    ['接收超时 RTO','支持（RTOR，RTO[23:0]）','无 RTOR'],
+    ['保护时间 GTPR','支持（GT/PSC）','无'],
+    ['起始位检测','下降沿 + 3/5/7 与 8/9/10 两次三采样','下降沿 + 起始位中点单次确认'],
+    ['噪声检测','三采样多数表决，NE 可用','无（每位只采一次）'],
+    ['2 个停止位判 FE','在第一个停止位判','在第二个停止位判'],
+    ['波特率寄存器','BRR[15:0]，USARTDIV ≥ 16','BRR[19:0] ≥ 0x300'],
+    ['FIFO','收发 FIFO，FIFOEN=1','同样有（TX 9 位 / RX 12 位）'],
+    ['DMA / 硬件流控 / RS485 DE / 单线半双工','支持','支持'],
+    ['低功耗','UESM 唤醒；自主模式','低功耗设计，32.768 kHz 即可 9600 波特']
+  ];
+  $('#instWrap').innerHTML=
+    '<div class="note">常用功能 → 关键使能位 → 本页对应场景。功能条目取自 §66.2 / §66.3，位定义取自 §66.8。</div>'+
+    '<table class="gt"><thead><tr><th style="width:180px">常用功能</th><th>关键位 / 寄存器</th><th style="width:96px">本页场景</th></tr></thead><tbody>'+
+    [
+      ['异步收发 8/9 位','CR1.M0/M1、CR1.TE/RE','① 发送 / ② 接收'],
+      ['校验位','CR1.PCE/PS（校验位占 MSB）','① 发送'],
+      ['停止位 0.5/1/1.5/2','CR2.STOP[1:0]','① 发送'],
+      ['波特率','PRESC、BRR/USARTDIV、CR1.OVER8','③ 波特率'],
+      ['中断收发','CR1.TXEIE/TCIE/RXNEIE/IDLEIE','④ 中断'],
+      ['DMA 连续收发','CR3.DMAT/DMAR','⑤ DMA'],
+      ['IDLE 不定长帧','CR1.IDLEIE + ICR.IDLECF','④ / ⑤'],
+      ['错误检测','ISR.ORE/FE/NE/PE、CR3.EIE、CR3.ONEBIT','⑥ 错误'],
+      ['收发 FIFO','CR1.FIFOEN、CR3.TXFTCFG/RXFTCFG','表（未做场景）'],
+      ['硬件流控 RTS/CTS','CR3.RTSE/CTSE/CTSIE','表（未做场景）'],
+      ['RS-485 驱动使能','CR3.DEM/DEP、CR1.DEAT/DEDT','表（未做场景）'],
+      ['LIN / 智能卡 / IrDA / 同步','CR2.LINEN、CR3.SCEN、CR3.IREN、CR2.CLKEN','表（未做场景）'],
+      ['自动波特率','CR2.ABREN/ABRMOD、RQR.ABRRQ','表（未做场景）'],
+      ['接收超时 RTO','CR2.RTOEN、RTOR.RTO[23:0]','表（未做场景）'],
+      ['静音 / 唤醒','CR1.MME/WAKE、CR2.ADD、CR1.UESM','表（未做场景）']
+    ].map(r=>'<tr><td>'+r[0]+'</td><td class="en">'+r[1]+'</td><td>'+r[2]+'</td></tr>').join('')+
+    '</tbody></table>'+
+    '<div class="note">U575 的串口实例与总线：数据手册写明“3 个 USART 接口”，并出现 USARTx（x=1…5）与 LPUART1；RM0456 本身不逐型号列实例清单（§66.4 表 666 的实例列为矢量，未读取）。</div>'+
+    '<table class="gt"><thead><tr><th style="width:110px">实例</th><th style="width:80px">总线</th><th style="width:90px">时钟使能位</th><th>寄存器</th></tr></thead><tbody>'+
+    bus.map(r=>'<tr><td class="ab">'+r[0]+'</td><td>'+r[1]+'</td><td class="en">'+r[2]+'</td><td class="en">'+r[3]+'</td></tr>').join('')+
+    '</tbody></table>'+
+    '<div class="note">总线归属来自 RCC 时钟使能寄存器（§11.8.33/35/36, p.1118–1130）；USART6 仅部分型号可用，U575 请以数据手册为准。</div>'+
+    '<table class="gt"><thead><tr><th style="width:180px">能力</th><th>USART / UART（§66 描述的集合）</th><th>LPUART1（§67 明确差异）</th></tr></thead><tbody>'+
+    diff.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td></tr>').join('')+
+    '</tbody></table>'+
+    '<div class="note warn">说明：RM0456 表 667 的“完整特性 / 基础特性”X 标记在 PDF 中是矢量图形（p.5496），因此本页不给出“USART1 支持 X、UART4 不支持 Y”的逐实例断言；UART4/5 与 USART1/2/3 的差异请查数据手册的引脚/复用表与实例表。模式互斥关系（LINEN / CLKEN / SCEN / HDSEL / IREN 两两互斥等）见 §66.5.14–66.5.19。</div>';
+}
+function renderCode(){
+  $('#codeWrap').innerHTML=CODE.map((c,i)=>
+    '<details class="codeblk"'+((SCENES[S.scene].code===c.id||(i===0&&!CODE.some(x=>x.id===SCENES[S.scene].code)))?' open':'')+'>'+
+    '<summary>'+c.title+'</summary><pre>'+c.body.replace(/</g,'&lt;')+'</pre>'+
+    '<div class="cap">'+c.cap+'</div></details>'
+  ).join('');
+}
+
+/* ---------------- 常用状态位 ---------------- */
+const FLAGS=[
+{id:'TXE',a:'TXE / TXFNF',pos:'ISR bit7',g:'收发',
+ set:'TDR 内容已转入移位寄存器；FIFO 模式下为 TXFIFO 未满',
+ clr:'写 TDR（FIFO 满时硬件清零）',
+ use:'轮询或中断里写下一个字节。它只说明“数据寄存器空”，不代表移位寄存器发完——后者看 TC。',
+ s:'§66.8.9, p.5638',ids:['TXE','TXFNF']},
+{id:'TC',a:'TC',pos:'ISR bit6',g:'收发',
+ set:'包含数据的帧发送完成，且 TXE/TXFE=1',
+ clr:'写 TDR，或向 ICR.TCCF 写 1',
+ use:'整帧结束时用。关 USART、切 RS485 方向、进低功耗前都要等 TC=1；DMA 发送完成也必须等它。',
+ s:'§66.8.9, p.5638',ids:['TC']},
+{id:'RXNE',a:'RXNE / RXFNE',pos:'ISR bit5',g:'收发',
+ set:'移位寄存器内容转入 RDR；FIFO 模式下为 RXFIFO 非空',
+ clr:'读 RDR，或向 RQR.RXFRQ 写 1',
+ use:'中断/DMA 收数据的主标志。ORE 与它共用同一个中断使能位，所以进中断后要同时检查 ORE。',
+ s:'§66.8.10, p.5650',ids:['RXNE','RXFNE']},
+{id:'BUSY',a:'BUSY',pos:'ISR bit16',g:'收发',
+ set:'RX 线上检测到起始位，正在接收',
+ clr:'硬件在接收结束后清零',
+ use:'判断“现在是否正在收”。关 RE 或进低功耗前可先看它，避免截断半帧。',
+ s:'§66.8.9, p.5634',ids:['BUSY']},
+{id:'IDLE',a:'IDLE',pos:'ISR bit4',g:'收发',
+ set:'检测到空闲线（整帧全 1）',
+ clr:'向 ICR.IDLECF 写 1；下一次 RXNE 置位前不会再次置位',
+ use:'不定长帧结束判据：IDLE 中断里用“缓冲区长度 − DMA 剩余计数”算出本帧字节数。',
+ s:'§66.8.9, p.5640',ids:['IDLE']},
+{id:'ORE',a:'ORE',pos:'ISR bit3',g:'错误',
+ set:'FIFO 关：RXNE 未清又收到新数据；FIFO 开：RXFIFO 已满而移位寄存器还有数据待传',
+ clr:'向 ICR.ORECF 写 1（先读 RDR 可救回旧数据）',
+ use:'溢出期间的新数据已丢，只能丢弃重传。OVRDIS=1 可关闭检测，但会静默覆盖。',
+ s:'§66.5.7, p.5520',ids:['ORE']},
+{id:'FE',a:'FE',pos:'ISR bit1',g:'错误',
+ set:'预期时刻未识别出停止位（失步、噪声过大、断点字符、智能卡 NACK）',
+ clr:'向 ICR.FECF 写 1',
+ use:'波特率不匹配或接线错误的首要线索。0.5 个停止位不采样，智能卡接收时无法检测 FE。',
+ s:'§66.5.7, p.5526',ids:['FE']},
+{id:'NE',a:'NE',pos:'ISR bit2',g:'错误',
+ set:'位中心三次采样不一致（在 RXNE 上升沿置位）',
+ clr:'向 ICR.NECF 写 1（正文写作 NFCF）',
+ use:'线路噪声判据，位值按多数表决取。ONEBIT=1 时只采一次，NE 永不置位。',
+ s:'§66.5.7, p.5524',ids:['NE']},
+{id:'PE',a:'PE',pos:'ISR bit0',g:'错误',
+ set:'接收到的校验位与本地计算不符',
+ clr:'向 ICR.PECF 写 1',
+ use:'校验通信的错误处理入口，PEIE=1 时可单独进中断。',
+ s:'§66.5.13, p.5544',ids:['PE']},
+{id:'TXFE',a:'TXFE',pos:'ISR bit23',g:'FIFO',
+ set:'TXFIFO 为空',
+ clr:'写入 TDR（或 RQR.TXFRQ 直接置位）',
+ use:'判断 FIFO 是否彻底排空；只是“TDR 空”看 TXE/TXFNF。',
+ s:'§66.8.9, p.5632',ids:[]},
+{id:'RXFF',a:'RXFF',pos:'ISR bit24',g:'FIFO',
+ set:'RXFIFO 满且 RDR 还有 1 个（数据量 = 容量 +1）',
+ clr:'读 RDR',
+ use:'溢出预警：看到 RXFF 就应立即取数或加大 DMA 搬运频率。',
+ s:'§66.8.9, p.5632',ids:[]},
+{id:'RXFT',a:'RXFT / TXFT',pos:'ISR bit26 / bit27',g:'FIFO',
+ set:'FIFO 数据量达到 RXFTCFG/TXFTCFG 设定的阈值',
+ clr:'读 RDR（RXFT）或写入 TDR（TXFT）',
+ use:'批量搬运：把阈值设成 1/2 或 3/4，可显著降低中断/DMA 请求次数。',
+ s:'§66.8.9, p.5630',ids:[]},
+{id:'CTSIF',a:'CTSIF',pos:'ISR bit9',g:'流控/多机',
+ set:'CTSE=1 时 CTS 输入发生翻转',
+ clr:'向 ICR.CTSCF 写 1',
+ use:'流控状态变化通知。CTS 位本身是引脚状态的反相副本。',
+ s:'§66.8.9, p.5636',ids:[]},
+{id:'CMF',a:'CMF',pos:'ISR bit17',g:'流控/多机',
+ set:'收到的字符等于 CR2.ADD[7:0]',
+ clr:'向 ICR.CMCF 写 1',
+ use:'多机地址唤醒；Modbus/ASCII 里用 CR/LF 字符匹配判断帧结束。',
+ s:'§66.8.3, p.5608',ids:[]},
+{id:'RWU',a:'RWU',pos:'ISR bit19',g:'流控/多机',
+ set:'写 RQR.MMRQ 进入静音',
+ clr:'硬件在地址匹配或空闲线唤醒时清零',
+ use:'多机通信从机静音；静音期间接收状态标志都无法置位。',
+ s:'§66.5.11, p.5538',ids:[]},
+{id:'SBKF',a:'SBKF',pos:'ISR bit18',g:'其他',
+ set:'写 RQR.SBKRQ 请求发送断点',
+ clr:'硬件在断点停止位期间清零',
+ use:'LIN 断点发送；断帧结束后发送器自动插入 2 个停止位。',
+ s:'§66.8.8, p.5628',ids:[]},
+{id:'RTOF',a:'RTOF',pos:'ISR bit11',g:'其他',
+ set:'RTOR 编程的超时到期且无通信',
+ clr:'向 ICR.RTOCF 写 1',
+ use:'Modbus/RTU 的帧间超时、智能卡的 CWT/BWT 计时。',
+ s:'§66.5.17, p.5558',ids:[]},
+{id:'ABR',a:'ABRF / ABRE',pos:'ISR bit15 / bit14',g:'其他',
+ set:'自动波特率测量完成 / 失败',
+ clr:'向 RQR.ABRRQ 写 1 清除并重启测量',
+ use:'未知波特率自适应（起始位、下降沿、0x7F、0x55 四种模式）。',
+ s:'§66.5.10, p.5536',ids:[]},
+{id:'TCBGT',a:'TCBGT',pos:'ISR bit25',g:'其他',
+ set:'智能卡数据帧在保护时间前成功发出且未收到 NACK',
+ clr:'向 ICR.TCBGTCF 写 1，或写 TDR',
+ use:'智能卡 T=0/T=1 的发送完成判据，比 TC 更早。',
+ s:'§66.8.9, p.5632',ids:[]},
+{id:'LBDF',a:'LBDF',pos:'ISR bit8',g:'其他',
+ set:'检测到 LIN 断点（10/11 位连续 0 + 定界符）',
+ clr:'向 ICR.LBDCF 写 1',
+ use:'LIN 从机同步头识别；断点长度由 LBDL 选择。',
+ s:'§66.5.14, p.5546',ids:[]},
+{id:'REACK',a:'REACK / TEACK',pos:'ISR bit22 / bit21',g:'其他',
+ set:'硬件确认 RE/TE 的写入已生效',
+ clr:'对应 RE/TE 被清零后硬件清零',
+ use:'进低功耗前确认收发器真的就绪；只写 RE/TE 立刻进 Stop 可能还没生效。',
+ s:'§66.8.9, p.5632',ids:[]}
+];
+let flagFilter='all';
+function renderFlagFilters(){
+  const groups=['all',...Array.from(new Set(FLAGS.map(f=>f.g)))];
+  const box=$('#fFilters'); box.innerHTML='';
+  groups.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='gf'+(flagFilter===k?' on':'');
+    b.textContent=k==='all'?'全部':k;
+    b.onclick=()=>{ flagFilter=k; renderFlagFilters(); renderFlags(); };
+    box.appendChild(b);
+  });
+}
+function renderFlags(){
+  const q=($('#fq').value||'').trim().toLowerCase();
+  const list=FLAGS.filter(f=>{
+    if(flagFilter!=='all'&&f.g!==flagFilter) return false;
+    if(!q) return true;
+    return (f.a+' '+f.pos+' '+f.set+' '+f.clr+' '+f.use).toLowerCase().includes(q);
+  });
+  $('#fBody').innerHTML=list.map(f=>
+    '<tr id="flag-'+f.id+'"><td class="ab">'+f.a+'</td><td class="en">'+f.pos+'</td>'+
+    '<td>'+f.set+'</td><td>'+f.clr+'</td><td>'+f.use+'</td><td class="src">'+f.s+'</td></tr>'
+  ).join('');
+  $('#fCount').textContent=list.length+' / '+FLAGS.length+' 条';
+}
+function flagForLane(id){ return FLAGS.find(f=>f.ids&&f.ids.includes(id)); }
+function flagTip(f){
+  return '<div class="th"><b>'+f.a+'</b><span>'+f.pos+'</span></div>'+
+    '<div class="kv2"><b>置位</b> '+f.set+'<br><b>清除</b> '+f.clr+'<br><b>用法</b> '+f.use+'</div>'+
+    '<div class="note2">'+f.s+'</div>';
+}
+function showTab(name){
+  $$('.dtab').forEach(x=>x.classList.toggle('on',x.getAttribute('data-tab')===name));
+  $$('.pane').forEach(p=>p.classList.remove('on'));
+  const p=$('#pane-'+name); if(p) p.classList.add('on');
+  $('#drawer').classList.add('open'); $('#drawerToggle').textContent='收起';
+  if(name==='regs') renderRegs();
+  if(name==='flags'){ renderFlagFilters(); renderFlags(); }
+  setTimeout(drawWave,60);
+}
+function openFlag(id){
+  showTab('flags');
+  const tr=$('#flag-'+id);
+  if(!tr) return;
+  $$('#fBody tr').forEach(x=>x.classList.remove('hit'));
+  tr.classList.add('hit');
+  tr.scrollIntoView({block:'center'});
+}
+function showTip(e,html){
+  const tip=$('#tip');
+  tip.innerHTML=html; tip.classList.add('on');
+  const pad=14, w=tip.offsetWidth, h=tip.offsetHeight;
+  let x=e.clientX+pad, y=e.clientY+pad;
+  if(x+w>window.innerWidth-8) x=e.clientX-w-pad;
+  if(y+h>window.innerHeight-8) y=Math.max(8,window.innerHeight-h-8);
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function hideTip(){ $('#tip').classList.remove('on'); }
+
+/* ---------------- 绑定 ---------------- */
+function bind(){
+  $('#sceneList');
+  $$('.btn[data-focus]').forEach(b=>{
+    b.onclick=()=>{
+      $$('.btn[data-focus]').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      const f=b.getAttribute('data-focus');
+      if(f==='all'){ setHighlight([]); $('#bdiag').classList.remove('focus'); return; }
+      const map={
+        clk:['usart_ker_ck','usart_pclk','usart_ker_ck_pres','PRESC','BRR','baud_counter'],
+        tx:['TDR','TXFIFO','tx_shift','tx_control','USART_TX','TXE','TC'],
+        rx:['USART_RX','start_detect','rx_shift','RXFIFO','RDR','RXNE','sample_points'],
+        irq:['ISR','usart_it','usart_tx_dma','usart_rx_dma','DMA']
+      };
+      const ids=map[f]||[];
+      $$('#bdiag [data-t], #bdiag .mod').forEach(el=>{
+        const hit=ids.includes(el.id)||ids.includes(el.getAttribute('data-t'));
+        el.classList.toggle('hot',hit);
+      });
+      $('#bdiag').classList.add('focus');
+    };
+  });
+  $$('.dtab').forEach(b=>{
+    b.onclick=()=>showTab(b.getAttribute('data-tab'));
+  });
+  $('#drawerToggle').onclick=()=>{
+    const d=$('#drawer'); d.classList.toggle('open');
+    $('#drawerToggle').textContent=d.classList.contains('open')?'收起':'展开';
+    setTimeout(drawWave,60);
+  };
+  $('#btnGlossJump').onclick=()=>{ $('#drawer').classList.add('open'); $('#drawerToggle').textContent='收起'; renderGlossary(); setTimeout(drawWave,60); };
+  $('#btnFlagJump').onclick=()=>showTab('flags');
+  $('#btnPrev').onclick=()=>gotoStep(S.step-1);
+  $('#btnNext').onclick=()=>gotoStep(S.step+1);
+  $('#btnPlay').onclick=playToggle;
+  $('#btnReset').onclick=()=>{ S.t=0; S.step=0; drawWave(); renderStats(); renderStep(); };
+  $('#btnTick').onclick=()=>{ S.t=Math.min(S.tl.total,S.t+(S.tl.unit==='tick'?1:1)); drawWave(); renderStats(); };
+  $('#btnTickBit').onclick=()=>{ S.t=Math.min(S.tl.total,S.t+(S.tl.unit==='tick'?(S.tl.bt||16):1)); drawWave(); renderStats(); };
+  $('#btnClrFlag').onclick=()=>{
+    const i=S.tl.steps.findIndex(s=>/清/.test(s.title));
+    if(i>=0) gotoStep(i); else $('#stepNote').innerHTML='<b>提示</b> 本场景没有清除步骤。';
+  };
+  $('#btnAutoClr').onclick=()=>{ S.autoClear=!S.autoClear; $('#btnAutoClr').classList.toggle('on',S.autoClear); drawWave(); };
+  $('#btnSigNote').onclick=()=>{
+    $('#drawer').classList.add('open'); $('#drawerToggle').textContent='收起';
+    $$('.dtab').forEach(x=>x.classList.remove('on'));
+    const t=$$('.dtab').find(x=>x.getAttribute('data-tab')==='signals'); t.classList.add('on');
+    $$('.pane').forEach(p=>p.classList.remove('on')); $('#pane-signals').classList.add('on');
+    setTimeout(drawWave,60);
+  };
+  $('#speed').oninput=()=>{ updateSpeedLabel(); };
+  $('#gq').oninput=renderGlossary;
+  $('#gq').onkeydown=e=>{ if(e.key==='Escape'){ $('#gq').value=''; renderGlossary(); } };
+  $('#fq').oninput=renderFlags;
+  $('#fq').onkeydown=e=>{ if(e.key==='Escape'){ $('#fq').value=''; renderFlags(); } };
+  const cv=$('#wave');
+  cv.addEventListener('mousemove',e=>{
+    const i=waveLaneAt(e), ln=i>=0&&S.tl?S.tl.lanes[i]:null;
+    const f=ln?flagForLane(ln.id):null;
+    cv.style.cursor=f?'pointer':'default';
+    if(f) showTip(e,flagTip(f)); else hideTip();
+  });
+  cv.addEventListener('mouseleave',()=>{ hideTip(); cv.style.cursor='default'; });
+  cv.addEventListener('click',e=>{
+    const i=waveLaneAt(e), ln=i>=0&&S.tl?S.tl.lanes[i]:null;
+    const f=ln?flagForLane(ln.id):null;
+    if(f) openFlag(f.id);
+  });
+  $('#pData').onchange=()=>{ S.cfg.dataBits=+$('#pData').value; rebuild(true); };
+  $('#pParity').onchange=()=>{ S.cfg.parity=$('#pParity').value; rebuild(true); };
+  $('#pStop').onchange=()=>{ S.cfg.stop=+$('#pStop').value; rebuild(true); };
+  $('#pOver8').onchange=()=>{ S.cfg.over8=$('#pOver8').value==='1'; rebuild(true); };
+  $('#btnFocus').onclick=()=>{
+    $('.main').classList.toggle('focus');
+    $('#btnFocus').classList.toggle('on');
+    setTimeout(drawWave,60);
+  };
+  $$('#bdiag [data-t]').forEach(el=>{
+    const id=el.getAttribute('data-t');
+    el.addEventListener('mouseenter',e=>{
+      const t=TERMS.find(x=>x.id===id);
+      if(!t) return;
+      showTip(e,'<div class="th"><b>'+t.a+'</b><span>'+t.s+'</span></div>'+
+        '<div class="zh">'+t.zh+'</div><div class="en">'+t.en+'</div>'+
+        '<div class="kv2">'+t.u+'</div>');
+    });
+    el.addEventListener('mouseleave',hideTip);
+    el.addEventListener('click',()=>{ focusTerm(id); const t=TERMS.find(x=>x.id===id); if(t) $('#stepNote').innerHTML='<b>'+t.a+'</b> '+t.zh+' · '+t.u+' <span class="mini">'+t.s+'</span>'; });
+  });
+  window.addEventListener('resize',()=>drawWave());
+}
+
+/* ---------------- 启动 ---------------- */
+bind();
+$('#glossCount').textContent='('+TERMS.length+')';
+$('#flagCount').textContent='('+FLAGS.length+')';
+renderGlossary(); renderFilters(); renderInst(); renderCode();
+renderFlagFilters(); renderFlags();
+selectScene(0);
+</script>
+</body>
+</html>
