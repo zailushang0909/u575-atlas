@@ -1984,13 +1984,20 @@ function forceTi1Edge(){
 function updateFlagUI(){
   const b = $('#btnAutoClr');
   if(b) b.classList.toggle('on', S.autoClear);
+  const cb = $('#btnClrFlag');
+  if(cb){
+    cb.disabled = S.autoClear;
+    cb.title = S.autoClear ? '自动清已开启：标志由“中断”自动写 0，无需手动清'
+                           : '立即写 0 清除 UIF/CC1IF/CC2IF/BIF（不影响时序）';
+  }
   const el = $('#flagNote');
   if(el) el.textContent = S.autoClear
     ? '自动清：事件后由“中断”自动写 0，波形显示为短脉冲；关掉“自动清标志”可改成手动清。'
-    : '手动清：标志置 1 后保持高电平，点“清标志”才写 0；波形会一直保持到清除。';
+    : '手动清：标志置 1 后保持高电平，点“清标志”才写 0；清除不会暂停时序。';
 }
 function clearFlags(){
-  /* 模拟软件对标志位写 0（rc_w0）；硬件本身不会自动清除 */
+  if(S.autoClear) return;   /* 自动清模式下由 oneTick 负责清零 */
+  /* 模拟软件对标志位写 0（rc_w0）；只清标志，不改变播放状态 */
   S.rt.uif = 0; S.rt.cc1if = 0; S.rt.cc2if = 0; S.rt.bif = 0;
   S.rt.uifPulse = 0; S.rt.cc1Pulse = 0; S.rt.bifPulse = 0;
   if(S.samples.length){
@@ -1998,7 +2005,6 @@ function clearFlags(){
     s.uif = 0; s.cc1if = 0; s.bif = 0;
     S.samples.push(s);
   }
-  S.playing = false; updatePlayBtn();
   drawWave(); lastStat = 0; updateStat(); renderSignalNotes();
 }
 
